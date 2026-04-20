@@ -1,0 +1,7 @@
+- `raw/kaggle/archives/`: original zip archives downloaded from Kaggle
+- `raw/kaggle/full_emoji_image_dataset/`: extracted vendor emoji images
+- `raw/kaggle/unicode_emoji_meanings/`: extracted emoji text metadata
+- `raw/kaggle/emojinet/`: extracted EmojiNet lexical metadata
+- `raw/kaggle/unicode_emoji_image_dataset/`: extracted uniformly rendered Unicode emoji images
+- `interim/`: cleaned tables, filtered subsets, and generated training pairs
+- `processed/`: final training-ready data
