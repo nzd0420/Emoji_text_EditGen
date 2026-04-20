@@ -1,0 +1,53 @@
+{
+  "emoji_catalog_count": 1816,
+  "face_emoji_count": 97,
+  "vendor_image_count": 818,
+  "style_transfer_pair_count": 6386,
+  "semantic_edit_pair_count": 69414,
+  "all_edit_pair_count": 75800,
+  "emotion_distribution": {
+    "angry": 5,
+    "cool": 3,
+    "fear": 4,
+    "joy": 18,
+    "love": 6,
+    "neutral": 10,
+    "other": 5,
+    "playful": 5,
+    "sad": 14,
+    "sick": 11,
+    "surprised": 10,
+    "thinking": 6
+  },
+  "split_distribution": {
+    "test": 3748,
+    "train": 68219,
+    "val": 3833
+  },
+  "task_split_distribution": {
+    "style_transfer": {
+      "train": 5769,
+      "test": 301,
+      "val": 316
+    },
+    "semantic_edit": {
+      "train": 62450,
+      "val": 3517,
+      "test": 3447
+    }
+  },
+  "vendor_face_counts": {
+    "Apple": 97,
+    "Google": 97,
+    "Facebook": 95,
+    "Windows": 95,
+    "Twitter": 97,
+    "JoyPixels": 97,
+    "Samsung": 95,
+    "Gmail": 48,
+    "SoftBank": 36,
+    "DoCoMo": 25,
+    "KDDI": 36
+  },
+  "canonical_unicode_image_count": 94
+}
