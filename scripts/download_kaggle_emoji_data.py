@@ -27,7 +27,7 @@ class DownloadConfig:
 # 在这里修改下载脚本配置。
 DOWNLOAD_CONFIG = DownloadConfig(
     project_root=Path(__file__).resolve().parents[1],  # 项目根目录，通常不需要改。
-    force_redownload=False,  # 设为 True 时会重新下载并重新解压所有数据。
+    force_redownload=True,  # 设为 True 时会重新下载并重新解压所有数据。
 )
 
 

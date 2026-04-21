@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Train a diffusion-based emoji editor with text-guided image conditioning."""
 
 from __future__ import annotations
@@ -19,6 +18,16 @@ from torch.optim import AdamW
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 from transformers import AutoTokenizer, CLIPTextModel
+
+import sys
+import os
+
+# 获取当前文件的目录，并向上一级找到根目录
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(current_dir) 
+
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
 from emoji_editing.diffusion_data import EmojiDiffusionCollator, EmojiDiffusionEditDataset
 from emoji_editing.prompting import DEFAULT_NEGATIVE_PROMPT, PromptBuildConfig
@@ -78,13 +87,13 @@ TRAIN_CONFIG = DiffusionTrainConfig(
     pair_csv=Path("data/interim/emoji_editing/metadata/all_edit_pairs.csv"),  # 训练样本表路径。
     output_dir=Path("artifacts/emoji_diffusion_editor"),  # LoRA、日志和验证图输出目录。
     resolution=256,  # 训练分辨率。
-    train_batch_size=24,  # 单卡训练 batch size。
+    train_batch_size=32,  # 单卡训练 batch size。
     eval_batch_size=8,  # 预留给后续扩展验证批处理。
     dataloader_num_workers=8,  # DataLoader worker 数量。
-    epochs=12,  # 训练轮数。
+    epochs=30,  # 训练轮数。
     max_train_steps=None,  # 固定总步数时填整数；None 表示按 epochs 自动推算。
     learning_rate=1e-4,  # 学习率。
-    scale_lr=False,  # 是否按总 batch 自动缩放学习率。
+    scale_lr=True,  # 是否按总 batch 自动缩放学习率。
     lr_scheduler="cosine",  # 学习率调度器类型。
     lr_warmup_steps=500,  # 预热步数。
     snr_gamma=None,  # 启用 Min-SNR Loss 时填写数值，例如 5.0。
@@ -94,8 +103,8 @@ TRAIN_CONFIG = DiffusionTrainConfig(
     adam_epsilon=1e-8,  # AdamW epsilon。
     max_grad_norm=1.0,  # 梯度裁剪上限。
     gradient_accumulation_steps=1,  # 梯度累积步数。
-    mixed_precision="bf16",  # RTX 40 系列优先试 bf16；不稳定时改 fp16。
-    seed=42,  # 随机种子。
+    mixed_precision="fp16",  # RTX 40 系列优先试 bf16；不稳定时改 fp16。
+    seed=2024533116,  # 随机种子。
     rank=16,  # LoRA rank。
     lora_alpha=16,  # LoRA alpha。
     lora_dropout=0.0,  # LoRA dropout。

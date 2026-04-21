@@ -87,7 +87,7 @@ class PreprocessConfig:
 # 在这里修改预处理脚本配置。
 PREPROCESS_CONFIG = PreprocessConfig(
     project_root=Path(__file__).resolve().parents[1],  # 项目根目录，通常不需要改。
-    force_rebuild=False,  # 设为 True 时会删除并重新生成 metadata 与处理后的图片。
+    force_rebuild=True,  # 设为 True 时会删除并重新生成 metadata 与处理后的图片。
 )
 
 
