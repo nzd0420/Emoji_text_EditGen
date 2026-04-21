@@ -26,107 +26,100 @@
 pip install -r requirements-train.txt
 ```
 
-### 2. 下载并预处理数据
+### 2. 修改脚本顶部配置区
+
+现在所有入口脚本都改成了“直接在代码里改配置”的方式，不再依赖项目参数命令行传参。
+
+你只需要打开对应脚本，在文件顶部的配置区修改参数即可。每个字段旁边都写了中文注释，常改的位置主要是：
+
+- [scripts/download_kaggle_emoji_data.py](/Users/ningzd/Desktop/Pic_Gen/scripts/download_kaggle_emoji_data.py)：下载目录、是否强制重下
+- [scripts/preprocess_emoji_editing_data.py](/Users/ningzd/Desktop/Pic_Gen/scripts/preprocess_emoji_editing_data.py)：预处理目录、是否强制重建
+- [scripts/train_emoji_diffusion_editor.py](/Users/ningzd/Desktop/Pic_Gen/scripts/train_emoji_diffusion_editor.py)：diffusion 训练超参数
+- [scripts/train_multimodal_conditioner.py](/Users/ningzd/Desktop/Pic_Gen/scripts/train_multimodal_conditioner.py)：多模态编码器训练超参数
+- [scripts/infer_emoji_editor.py](/Users/ningzd/Desktop/Pic_Gen/scripts/infer_emoji_editor.py)：推理脚本配置
+- [app.py](/Users/ningzd/Desktop/Pic_Gen/app.py)：Gradio 界面配置
+
+### 3. 下载并预处理数据
 
 ```bash
 python scripts/download_kaggle_emoji_data.py
-python scripts/preprocess_emoji_editing_data.py --force
+python scripts/preprocess_emoji_editing_data.py
 ```
 
-### 3. 单机单卡 RTX 训练
+如果你想重新生成全部中间文件，把 [scripts/preprocess_emoji_editing_data.py](/Users/ningzd/Desktop/Pic_Gen/scripts/preprocess_emoji_editing_data.py) 里的 `force_rebuild` 改成 `True` 再运行一次。
 
-对大多数 RTX 显卡，`fp16` 是最稳妥的默认选择。
+### 4. 单机单卡 RTX 训练
+
+对大多数 RTX 显卡，推理通常优先用 `fp16`，训练可以先试 `bf16`；如果你本机不稳定，再改成 `fp16`。
+
+先在 [scripts/train_emoji_diffusion_editor.py](/Users/ningzd/Desktop/Pic_Gen/scripts/train_emoji_diffusion_editor.py) 顶部改好 `TRAIN_CONFIG`，再直接运行：
 
 ```bash
-accelerate launch --num_processes 1 --mixed_precision fp16 \
-  scripts/train_emoji_diffusion_editor.py \
-  --output-dir artifacts/emoji_diffusion_editor \
-  --resolution 256 \
-  --train-batch-size 24 \
-  --gradient-accumulation-steps 2 \
-  --gradient-checkpointing \
-  --allow-tf32 \
-  --train-text-encoder-lora
+python scripts/train_emoji_diffusion_editor.py
 ```
 
-如果你的显卡显存更大，可以适当增大：
+单卡常改参数：
 
-- `--train-batch-size`
-- `--resolution`
-- `--rank`
+- `resolution`
+- `train_batch_size`
+- `gradient_accumulation_steps`
+- `rank`
+- `mixed_precision`
+- `enable_xformers_memory_efficient_attention`
 
-如果已经安装 `xformers`，可以额外加入：
+如果你也要训练多模态条件编码器，先在 [scripts/train_multimodal_conditioner.py](/Users/ningzd/Desktop/Pic_Gen/scripts/train_multimodal_conditioner.py) 里修改 `TRAIN_CONFIG`，然后运行：
 
 ```bash
---enable-xformers-memory-efficient-attention
+python scripts/train_multimodal_conditioner.py
 ```
 
-### 4. 推理与交互界面
+### 5. 推理与交互界面
 
 启动可视化交互界面：
 
 ```bash
-python app.py \
-  --base-model timbrooks/instruct-pix2pix \
-  --lora-path artifacts/emoji_diffusion_editor/lora_final
+python app.py
 ```
 
 命令行推理：
 
 ```bash
-python scripts/infer_emoji_editor.py \
-  --instruction "Add sunglasses and make the face more confident." \
-  --vendor Apple
+python scripts/infer_emoji_editor.py
 ```
 
-如果要直接对本地图片推理：
-
-```bash
-python scripts/infer_emoji_editor.py \
-  --input-image path/to/emoji.png \
-  --instruction "Turn this into a crying emoji with visible tears."
-```
+如果要直接对本地图片推理，就把 [scripts/infer_emoji_editor.py](/Users/ningzd/Desktop/Pic_Gen/scripts/infer_emoji_editor.py) 顶部的 `input_image` 改成你的图片路径，并把 `instruction` 改成目标编辑要求。
 
 ## 多卡集群训练
 
 ### 单机多卡服务器
 
-例如单机 8 卡：
+如果你要在单机多卡服务器上训练，脚本内部超参数仍然在代码顶部修改；命令行只负责拉起多进程。
+
+先运行一次：
 
 ```bash
-accelerate launch --multi_gpu --mixed_precision bf16 \
-  --num_processes 8 \
-  scripts/train_emoji_diffusion_editor.py \
-  --output-dir artifacts/emoji_diffusion_editor \
-  --resolution 256 \
-  --train-batch-size 24 \
-  --gradient-accumulation-steps 1 \
-  --gradient-checkpointing \
-  --allow-tf32 \
-  --train-text-encoder-lora \
-  --enable-xformers-memory-efficient-attention
+accelerate config
+```
+
+然后直接启动：
+
+```bash
+accelerate launch scripts/train_emoji_diffusion_editor.py
+```
+
+如果是多模态编码器的 DDP 训练：
+
+```bash
+torchrun --standalone --nproc_per_node=8 scripts/train_multimodal_conditioner.py
 ```
 
 ### 多机多卡集群
 
-如果是多机训练，先在各节点完成相同环境与数据准备，然后设置分布式环境变量，再运行：
+如果是多机训练，同样先在脚本顶部配好超参数，再由集群调度器或 `accelerate` 负责分布式拓扑。推荐先在每台机器上完成相同的数据准备和环境安装，然后执行：
 
 ```bash
-accelerate launch --multi_gpu --mixed_precision bf16 \
-  --num_processes 8 \
-  --num_machines 2 \
-  --machine_rank 0 \
-  --main_process_ip <MASTER_ADDR> \
-  --main_process_port <MASTER_PORT> \
-  scripts/train_emoji_diffusion_editor.py \
-  --output-dir artifacts/emoji_diffusion_editor \
-  --resolution 256 \
-  --train-batch-size 24 \
-  --gradient-accumulation-steps 1 \
-  --gradient-checkpointing \
-  --allow-tf32 \
-  --train-text-encoder-lora \
-  --enable-xformers-memory-efficient-attention
+accelerate config
+accelerate launch scripts/train_emoji_diffusion_editor.py
 ```
 
-第二台机器将 `--machine_rank` 改为 `1`，其余参数保持一致。
+如果你的集群是通过 Slurm、MPI 或平台侧封装来启动多机任务，也只需要保持脚本本身不带项目参数，交给集群环境注入并行配置即可。

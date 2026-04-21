@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import argparse
 import csv
 import hashlib
 import json
 import re
 import shutil
 from collections import Counter, defaultdict
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
@@ -78,20 +78,17 @@ ATTRIBUTE_FIELDS = [
 ]
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--project-root",
-        type=Path,
-        default=Path(__file__).resolve().parents[1],
-        help="Project root where data/raw is located.",
-    )
-    parser.add_argument(
-        "--force",
-        action="store_true",
-        help="Rebuild processed images and metadata outputs from scratch.",
-    )
-    return parser.parse_args()
+@dataclass(frozen=True)
+class PreprocessConfig:
+    project_root: Path
+    force_rebuild: bool
+
+
+# 在这里修改预处理脚本配置。
+PREPROCESS_CONFIG = PreprocessConfig(
+    project_root=Path(__file__).resolve().parents[1],  # 项目根目录，通常不需要改。
+    force_rebuild=False,  # 设为 True 时会删除并重新生成 metadata 与处理后的图片。
+)
 
 
 def normalize_unicode(value: str) -> str:
@@ -592,9 +589,9 @@ def build_catalogs(project_root: Path, force: bool) -> dict[str, Path]:
 
 
 def main() -> int:
-    args = parse_args()
-    project_root = args.project_root.resolve()
-    outputs = build_catalogs(project_root, force=args.force)
+    config = PREPROCESS_CONFIG
+    project_root = config.project_root.resolve()
+    outputs = build_catalogs(project_root, force=config.force_rebuild)
     print(f"Metadata written to: {outputs['metadata_root']}")
     print(f"Processed vendor images: {outputs['processed_vendor_root']}")
     print(f"Processed canonical unicode images: {outputs['processed_unicode_root']}")

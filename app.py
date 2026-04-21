@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import argparse
 import json
+from dataclasses import dataclass
 from pathlib import Path
 
 import gradio as gr
@@ -14,21 +14,33 @@ from emoji_editing.diffusion_inference import choices_for_vendor, edit_emoji_ima
 from emoji_editing.prompting import DEFAULT_NEGATIVE_PROMPT
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--base-model", default="timbrooks/instruct-pix2pix")
-    parser.add_argument("--lora-path", default="artifacts/emoji_diffusion_editor/lora_final")
-    parser.add_argument("--vendor-index-csv", default="data/interim/emoji_editing/metadata/vendor_image_index.csv")
-    parser.add_argument("--precision", choices=["fp32", "fp16", "bf16"], default="fp16")
-    parser.add_argument("--device", default=None)
-    parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=7860)
-    parser.add_argument("--share", action="store_true")
-    return parser.parse_args()
+@dataclass(frozen=True)
+class UIConfig:
+    base_model: str
+    lora_path: Path
+    vendor_index_csv: Path
+    precision: str
+    device: str | None
+    host: str
+    port: int
+    share: bool
 
 
-def build_interface(args: argparse.Namespace) -> gr.Blocks:
-    catalog_bundle = load_ui_catalog(args.vendor_index_csv)
+# 在这里修改可视化界面配置。
+UI_CONFIG = UIConfig(
+    base_model="timbrooks/instruct-pix2pix",  # 推理底座模型。
+    lora_path=Path("artifacts/emoji_diffusion_editor/lora_final"),  # 训练完成后的 LoRA 目录。
+    vendor_index_csv=Path("data/interim/emoji_editing/metadata/vendor_image_index.csv"),  # 内置 emoji 索引表。
+    precision="fp16",  # RTX 单卡界面推理通常先用 fp16。
+    device=None,  # 强制设备，例如 'cuda:0'；保持 None 时自动选择。
+    host="127.0.0.1",  # Gradio 监听地址。
+    port=7860,  # Gradio 端口。
+    share=False,  # 是否生成公网分享链接。
+)
+
+
+def build_interface(config: UIConfig) -> gr.Blocks:
+    catalog_bundle = load_ui_catalog(config.vendor_index_csv)
     entries: list[EmojiCatalogEntry] = catalog_bundle["entries"]
     lookup: dict[str, EmojiCatalogEntry] = catalog_bundle["lookup"]
     vendors: list[str] = catalog_bundle["vendors"]
@@ -141,10 +153,10 @@ def build_interface(args: argparse.Namespace) -> gr.Blocks:
         result, metadata = edit_emoji_image(
             source_image=source_image,
             instruction=instruction,
-            base_model=args.base_model,
-            lora_path=args.lora_path if Path(args.lora_path).exists() else None,
-            precision=args.precision,
-            device=args.device,
+            base_model=config.base_model,
+            lora_path=config.lora_path if config.lora_path.exists() else None,
+            precision=config.precision,
+            device=config.device,
             source_name=source_name,
             source_vendor=source_vendor,
             steps=steps,
@@ -251,9 +263,9 @@ def build_interface(args: argparse.Namespace) -> gr.Blocks:
 
 
 def main() -> int:
-    args = parse_args()
-    demo = build_interface(args)
-    demo.launch(server_name=args.host, server_port=args.port, share=args.share)
+    config = UI_CONFIG
+    demo = build_interface(config)
+    demo.launch(server_name=config.host, server_port=config.port, share=config.share)
     return 0
 
 

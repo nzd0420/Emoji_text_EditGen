@@ -3,13 +3,12 @@
 
 from __future__ import annotations
 
-import argparse
 import json
 import math
 import os
 import random
 import time
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import numpy as np
@@ -31,59 +30,93 @@ from emoji_editing import (
 )
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--pair-csv",
-        type=Path,
-        default=Path("data/interim/emoji_editing/metadata/all_edit_pairs.csv"),
-        help="Path to the generated edit-pair CSV.",
-    )
-    parser.add_argument(
-        "--output-dir",
-        type=Path,
-        default=Path("artifacts/multimodal_conditioner"),
-        help="Directory for checkpoints, vocab, and logs.",
-    )
-    parser.add_argument("--text-model-name", default="intfloat/multilingual-e5-base")
-    parser.add_argument("--vision-model-name", default="openai/clip-vit-base-patch32")
-    parser.add_argument("--attn-implementation", default="sdpa")
-    parser.add_argument("--image-size", type=int, default=224)
-    parser.add_argument("--max-length", type=int, default=96)
-    parser.add_argument("--train-batch-size", type=int, default=64)
-    parser.add_argument("--eval-batch-size", type=int, default=128)
-    parser.add_argument("--num-workers", type=int, default=8)
-    parser.add_argument("--prefetch-factor", type=int, default=4)
-    parser.add_argument("--epochs", type=int, default=10)
-    parser.add_argument("--lr", type=float, default=2e-4)
-    parser.add_argument("--min-lr-scale", type=float, default=0.1)
-    parser.add_argument("--weight-decay", type=float, default=0.01)
-    parser.add_argument("--warmup-ratio", type=float, default=0.03)
-    parser.add_argument("--grad-accum-steps", type=int, default=1)
-    parser.add_argument("--max-grad-norm", type=float, default=1.0)
-    parser.add_argument("--fusion-dim", type=int, default=768)
-    parser.add_argument("--num-query-tokens", type=int, default=8)
-    parser.add_argument("--fusion-layers", type=int, default=4)
-    parser.add_argument("--fusion-heads", type=int, default=12)
-    parser.add_argument("--mlp-ratio", type=float, default=4.0)
-    parser.add_argument("--dropout", type=float, default=0.0)
-    parser.add_argument("--freeze-text-backbone", action="store_true")
-    parser.add_argument("--freeze-vision-backbone", action="store_true")
-    parser.add_argument("--disable-gradient-checkpointing", action="store_true")
-    parser.add_argument("--contrastive-loss-weight", type=float, default=1.0)
-    parser.add_argument("--emotion-loss-weight", type=float, default=0.35)
-    parser.add_argument("--vendor-loss-weight", type=float, default=0.35)
-    parser.add_argument("--task-loss-weight", type=float, default=0.2)
-    parser.add_argument("--sentiment-loss-weight", type=float, default=0.1)
-    parser.add_argument("--label-smoothing", type=float, default=0.0)
-    parser.add_argument("--precision", choices=["bf16", "fp16", "fp32"], default="bf16")
-    parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--log-interval", type=int, default=50)
-    parser.add_argument("--compile", action="store_true")
-    parser.add_argument("--resume-from", type=Path, default=None)
-    parser.add_argument("--max-train-samples", type=int, default=None)
-    parser.add_argument("--max-val-samples", type=int, default=None)
-    return parser.parse_args()
+@dataclass
+class MultimodalTrainConfig:
+    pair_csv: Path
+    output_dir: Path
+    text_model_name: str
+    vision_model_name: str
+    attn_implementation: str
+    image_size: int
+    max_length: int
+    train_batch_size: int
+    eval_batch_size: int
+    num_workers: int
+    prefetch_factor: int
+    epochs: int
+    lr: float
+    min_lr_scale: float
+    weight_decay: float
+    warmup_ratio: float
+    grad_accum_steps: int
+    max_grad_norm: float
+    fusion_dim: int
+    num_query_tokens: int
+    fusion_layers: int
+    fusion_heads: int
+    mlp_ratio: float
+    dropout: float
+    freeze_text_backbone: bool
+    freeze_vision_backbone: bool
+    disable_gradient_checkpointing: bool
+    contrastive_loss_weight: float
+    emotion_loss_weight: float
+    vendor_loss_weight: float
+    task_loss_weight: float
+    sentiment_loss_weight: float
+    label_smoothing: float
+    precision: str
+    seed: int
+    log_interval: int
+    compile_model: bool
+    resume_from: Path | None
+    max_train_samples: int | None
+    max_val_samples: int | None
+
+
+# 在这里修改多模态编码器训练配置。
+TRAIN_CONFIG = MultimodalTrainConfig(
+    pair_csv=Path("data/interim/emoji_editing/metadata/all_edit_pairs.csv"),  # 训练样本表路径。
+    output_dir=Path("artifacts/multimodal_conditioner"),  # 模型、日志和词表输出目录。
+    text_model_name="intfloat/multilingual-e5-base",  # 文本编码器。
+    vision_model_name="openai/clip-vit-base-patch32",  # 视觉编码器。
+    attn_implementation="sdpa",  # 注意力实现方式，NVIDIA 新卡建议保留 sdpa。
+    image_size=224,  # 输入图像尺寸。
+    max_length=96,  # 指令最大 token 长度。
+    train_batch_size=64,  # 训练 batch size。
+    eval_batch_size=128,  # 验证 batch size。
+    num_workers=8,  # DataLoader worker 数量。
+    prefetch_factor=4,  # 每个 worker 预取批次数。
+    epochs=10,  # 训练轮数。
+    lr=2e-4,  # 初始学习率。
+    min_lr_scale=0.1,  # 余弦退火的最低学习率比例。
+    weight_decay=0.01,  # AdamW 权重衰减。
+    warmup_ratio=0.03,  # 预热步数占比。
+    grad_accum_steps=1,  # 梯度累积步数。
+    max_grad_norm=1.0,  # 梯度裁剪上限。
+    fusion_dim=768,  # 融合层隐藏维度。
+    num_query_tokens=8,  # 查询 token 数量。
+    fusion_layers=4,  # 融合层层数。
+    fusion_heads=12,  # 融合层注意力头数。
+    mlp_ratio=4.0,  # 融合层 FFN 扩展比例。
+    dropout=0.0,  # 融合层 dropout。
+    freeze_text_backbone=False,  # 是否冻结文本 backbone。
+    freeze_vision_backbone=False,  # 是否冻结视觉 backbone。
+    disable_gradient_checkpointing=False,  # 设为 True 时关闭梯度检查点。
+    contrastive_loss_weight=1.0,  # 对比学习损失权重。
+    emotion_loss_weight=0.35,  # 情绪分类损失权重。
+    vendor_loss_weight=0.35,  # 平台风格分类损失权重。
+    task_loss_weight=0.2,  # 任务类型分类损失权重。
+    sentiment_loss_weight=0.1,  # 情感极性分类损失权重。
+    label_smoothing=0.0,  # 分类标签平滑。
+    precision="bf16",  # RTX 40 系列优先试 bf16；不稳定时改 fp16。
+    seed=42,  # 随机种子。
+    log_interval=50,  # 每隔多少个优化步打印一次日志。
+    compile_model=True,  # 是否启用 torch.compile。
+    resume_from=None,  # 恢复训练的 checkpoint 路径，不续训时保持 None。
+    max_train_samples=None,  # 调试时可限制训练样本数。
+    max_val_samples=None,  # 调试时可限制验证样本数。
+)
 
 
 def is_distributed() -> bool:
@@ -289,7 +322,7 @@ def save_checkpoint(
     epoch: int,
     global_step: int,
     best_val_loss: float,
-    args: argparse.Namespace,
+    config: MultimodalTrainConfig,
     filename: str,
 ) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -301,100 +334,100 @@ def save_checkpoint(
         "epoch": epoch,
         "global_step": global_step,
         "best_val_loss": best_val_loss,
-        "args": vars(args),
+        "config": asdict(config),
         "model_config": asdict(unwrapped.config),
     }
     torch.save(payload, output_dir / filename)
 
 
 def maybe_resume(
-    args: argparse.Namespace,
+    config: MultimodalTrainConfig,
     model: nn.Module,
     optimizer: AdamW,
     scheduler: LambdaLR,
     device: torch.device,
 ) -> tuple[int, int, float]:
-    if args.resume_from is None:
+    if config.resume_from is None:
         return 0, 0, float("inf")
 
-    checkpoint = torch.load(args.resume_from, map_location=device)
+    checkpoint = torch.load(config.resume_from, map_location=device)
     unwrapped = model.module if isinstance(model, DistributedDataParallel) else model
     unwrapped.load_state_dict(checkpoint["model"])
     optimizer.load_state_dict(checkpoint["optimizer"])
     scheduler.load_state_dict(checkpoint["scheduler"])
-    rank0_print(f"Resumed from {args.resume_from}")
+    rank0_print(f"Resumed from {config.resume_from}")
     return int(checkpoint["epoch"]), int(checkpoint["global_step"]), float(checkpoint["best_val_loss"])
 
 
 def main() -> int:
-    args = parse_args()
+    config = TRAIN_CONFIG
     device, local_rank = setup_distributed()
-    set_seed(args.seed + local_rank)
+    set_seed(config.seed + local_rank)
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
     torch.backends.cudnn.benchmark = True
 
-    output_dir = args.output_dir.resolve()
+    output_dir = config.output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    vocab = build_label_vocab_from_csv(args.pair_csv)
+    vocab = build_label_vocab_from_csv(config.pair_csv)
     if is_main_process():
         save_label_vocab(vocab, output_dir / "label_vocab.json")
 
-    tokenizer = AutoTokenizer.from_pretrained(args.text_model_name, use_fast=True)
-    collator = EmojiEditCollator(tokenizer=tokenizer, max_length=args.max_length, pad_to_multiple_of=8)
+    tokenizer = AutoTokenizer.from_pretrained(config.text_model_name, use_fast=True)
+    collator = EmojiEditCollator(tokenizer=tokenizer, max_length=config.max_length, pad_to_multiple_of=8)
 
     train_dataset = EmojiEditMultimodalDataset(
-        pair_csv_path=args.pair_csv,
+        pair_csv_path=config.pair_csv,
         split="train",
         vocab=vocab,
-        image_size=args.image_size,
-        max_samples=args.max_train_samples,
+        image_size=config.image_size,
+        max_samples=config.max_train_samples,
     )
     val_dataset = EmojiEditMultimodalDataset(
-        pair_csv_path=args.pair_csv,
+        pair_csv_path=config.pair_csv,
         split="val",
         vocab=vocab,
-        image_size=args.image_size,
-        max_samples=args.max_val_samples,
+        image_size=config.image_size,
+        max_samples=config.max_val_samples,
     )
 
     train_loader, train_sampler = create_dataloader(
         dataset=train_dataset,
         collator=collator,
-        batch_size=args.train_batch_size,
-        num_workers=args.num_workers,
-        prefetch_factor=args.prefetch_factor,
+        batch_size=config.train_batch_size,
+        num_workers=config.num_workers,
+        prefetch_factor=config.prefetch_factor,
         shuffle=True,
     )
     val_loader, _ = create_dataloader(
         dataset=val_dataset,
         collator=collator,
-        batch_size=args.eval_batch_size,
-        num_workers=args.num_workers,
-        prefetch_factor=args.prefetch_factor,
+        batch_size=config.eval_batch_size,
+        num_workers=config.num_workers,
+        prefetch_factor=config.prefetch_factor,
         shuffle=False,
     )
 
     model_config = EmojiEditMultimodalConfig(
-        text_model_name=args.text_model_name,
-        vision_model_name=args.vision_model_name,
-        attn_implementation=args.attn_implementation,
-        fusion_dim=args.fusion_dim,
-        num_query_tokens=args.num_query_tokens,
-        fusion_layers=args.fusion_layers,
-        fusion_heads=args.fusion_heads,
-        mlp_ratio=args.mlp_ratio,
-        dropout=args.dropout,
-        freeze_text_backbone=args.freeze_text_backbone,
-        freeze_vision_backbone=args.freeze_vision_backbone,
-        gradient_checkpointing=not args.disable_gradient_checkpointing,
-        contrastive_loss_weight=args.contrastive_loss_weight,
-        emotion_loss_weight=args.emotion_loss_weight,
-        vendor_loss_weight=args.vendor_loss_weight,
-        task_loss_weight=args.task_loss_weight,
-        sentiment_loss_weight=args.sentiment_loss_weight,
-        label_smoothing=args.label_smoothing,
+        text_model_name=config.text_model_name,
+        vision_model_name=config.vision_model_name,
+        attn_implementation=config.attn_implementation,
+        fusion_dim=config.fusion_dim,
+        num_query_tokens=config.num_query_tokens,
+        fusion_layers=config.fusion_layers,
+        fusion_heads=config.fusion_heads,
+        mlp_ratio=config.mlp_ratio,
+        dropout=config.dropout,
+        freeze_text_backbone=config.freeze_text_backbone,
+        freeze_vision_backbone=config.freeze_vision_backbone,
+        gradient_checkpointing=not config.disable_gradient_checkpointing,
+        contrastive_loss_weight=config.contrastive_loss_weight,
+        emotion_loss_weight=config.emotion_loss_weight,
+        vendor_loss_weight=config.vendor_loss_weight,
+        task_loss_weight=config.task_loss_weight,
+        sentiment_loss_weight=config.sentiment_loss_weight,
+        label_smoothing=config.label_smoothing,
     )
     model = EmojiEditMultimodalEncoder(
         config=model_config,
@@ -406,24 +439,24 @@ def main() -> int:
     model.to(device)
     model = model.to(memory_format=torch.channels_last)
 
-    if args.compile and hasattr(torch, "compile"):
+    if config.compile_model and hasattr(torch, "compile"):
         model = torch.compile(model)
 
     if is_distributed():
         model = DistributedDataParallel(model, device_ids=[local_rank], find_unused_parameters=False)
 
-    optimizer = build_optimizer(model, lr=args.lr, weight_decay=args.weight_decay)
-    steps_per_epoch = math.ceil(len(train_loader) / max(1, args.grad_accum_steps))
-    total_steps = max(1, steps_per_epoch * args.epochs)
+    optimizer = build_optimizer(model, lr=config.lr, weight_decay=config.weight_decay)
+    steps_per_epoch = math.ceil(len(train_loader) / max(1, config.grad_accum_steps))
+    total_steps = max(1, steps_per_epoch * config.epochs)
     scheduler = build_scheduler(
         optimizer=optimizer,
         total_steps=total_steps,
-        warmup_ratio=args.warmup_ratio,
-        min_lr_scale=args.min_lr_scale,
+        warmup_ratio=config.warmup_ratio,
+        min_lr_scale=config.min_lr_scale,
     )
 
     start_epoch, global_step, best_val_loss = maybe_resume(
-        args=args,
+        config=config,
         model=model,
         optimizer=optimizer,
         scheduler=scheduler,
@@ -434,24 +467,25 @@ def main() -> int:
         (output_dir / "train_config.json").write_text(
             json.dumps(
                 {
-                    "args": vars(args),
+                    "config": asdict(config),
                     "model_config": asdict(model_config),
                 },
                 ensure_ascii=False,
                 indent=2,
+                default=str,
             ),
             encoding="utf-8",
         )
 
-    autocast_dtype = get_autocast_dtype(args.precision)
-    scaler = torch.cuda.amp.GradScaler(enabled=args.precision == "fp16")
+    autocast_dtype = get_autocast_dtype(config.precision)
+    scaler = torch.cuda.amp.GradScaler(enabled=config.precision == "fp16")
 
     rank0_print(
         f"Train samples={len(train_dataset)} | Val samples={len(val_dataset)} | "
-        f"Train batch={args.train_batch_size} | Precision={args.precision}"
+        f"Train batch={config.train_batch_size} | Precision={config.precision}"
     )
 
-    for epoch in range(start_epoch, args.epochs):
+    for epoch in range(start_epoch, config.epochs):
         if train_sampler is not None:
             train_sampler.set_epoch(epoch)
 
@@ -477,17 +511,17 @@ def main() -> int:
                     target_emotion_ids=batch["target_emotion_ids"],
                     target_sentiment_ids=batch["target_sentiment_ids"],
                 )
-                loss = outputs["loss"] / args.grad_accum_steps
+                loss = outputs["loss"] / config.grad_accum_steps
 
             if scaler.is_enabled():
                 scaler.scale(loss).backward()
             else:
                 loss.backward()
 
-            if step % args.grad_accum_steps == 0:
+            if step % config.grad_accum_steps == 0:
                 if scaler.is_enabled():
                     scaler.unscale_(optimizer)
-                torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), config.max_grad_norm)
                 if scaler.is_enabled():
                     scaler.step(optimizer)
                     scaler.update()
@@ -501,17 +535,17 @@ def main() -> int:
                 running_loss += loss_value
                 running_steps += 1
 
-                if global_step % args.log_interval == 0 and running_steps > 0:
+                if global_step % config.log_interval == 0 and running_steps > 0:
                     avg_loss = running_loss / running_steps
                     lr = scheduler.get_last_lr()[0]
                     rank0_print(
-                        f"epoch={epoch + 1}/{args.epochs} step={global_step} "
+                        f"epoch={epoch + 1}/{config.epochs} step={global_step} "
                         f"loss={avg_loss:.4f} lr={lr:.6e}"
                     )
                     running_loss = 0.0
                     running_steps = 0
 
-        metrics = evaluate(model=model, dataloader=val_loader, device=device, precision=args.precision)
+        metrics = evaluate(model=model, dataloader=val_loader, device=device, precision=config.precision)
         epoch_time = time.time() - epoch_start
         rank0_print(
             f"epoch={epoch + 1} done in {epoch_time:.1f}s | "
@@ -530,7 +564,7 @@ def main() -> int:
                 epoch=epoch + 1,
                 global_step=global_step,
                 best_val_loss=best_val_loss,
-                args=args,
+                config=config,
                 filename="latest.pt",
             )
             if metrics["val_loss"] < best_val_loss:
@@ -543,7 +577,7 @@ def main() -> int:
                     epoch=epoch + 1,
                     global_step=global_step,
                     best_val_loss=best_val_loss,
-                    args=args,
+                    config=config,
                     filename="best.pt",
                 )
 

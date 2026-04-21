@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import argparse
 import shutil
 import sys
 import urllib.request
@@ -17,6 +16,19 @@ class DatasetSpec:
     archive_name: str
     extract_dir: str
     description: str
+
+
+@dataclass(frozen=True)
+class DownloadConfig:
+    project_root: Path
+    force_redownload: bool
+
+
+# 在这里修改下载脚本配置。
+DOWNLOAD_CONFIG = DownloadConfig(
+    project_root=Path(__file__).resolve().parents[1],  # 项目根目录，通常不需要改。
+    force_redownload=False,  # 设为 True 时会重新下载并重新解压所有数据。
+)
 
 
 DATASETS = [
@@ -99,25 +111,9 @@ def extract_archive(spec: DatasetSpec, archive_path: Path, extracts_root: Path, 
     return extract_path
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--project-root",
-        type=Path,
-        default=Path(__file__).resolve().parents[1],
-        help="Project root where the data directory lives.",
-    )
-    parser.add_argument(
-        "--force",
-        action="store_true",
-        help="Redownload archives and re-extract all datasets.",
-    )
-    return parser.parse_args()
-
-
 def main() -> int:
-    args = parse_args()
-    project_root = args.project_root.resolve()
+    config = DOWNLOAD_CONFIG
+    project_root = config.project_root.resolve()
     raw_kaggle_dir = project_root / "data" / "raw" / "kaggle"
     archives_dir = raw_kaggle_dir / "archives"
     interim_dir = project_root / "data" / "interim"
@@ -134,8 +130,8 @@ def main() -> int:
     for spec in DATASETS:
         print(f"== {spec.extract_dir} ==")
         print(spec.description)
-        archive_path = download_archive(spec, archives_dir, force=args.force)
-        extract_archive(spec, archive_path, raw_kaggle_dir, force=args.force)
+        archive_path = download_archive(spec, archives_dir, force=config.force_redownload)
+        extract_archive(spec, archive_path, raw_kaggle_dir, force=config.force_redownload)
         print()
 
     print("All requested Kaggle datasets are present.")

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Run the emoji diffusion editor from the command line."""
+"""Run the emoji diffusion editor with an in-file editable config block."""
 
 from __future__ import annotations
 
-import argparse
 import json
+from dataclasses import dataclass
 from pathlib import Path
 
 from PIL import Image
@@ -13,74 +13,96 @@ from emoji_editing.catalog import load_vendor_catalog
 from emoji_editing.diffusion_inference import edit_emoji_image
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--base-model", default="timbrooks/instruct-pix2pix")
-    parser.add_argument("--lora-path", default="artifacts/emoji_diffusion_editor/lora_final")
-    parser.add_argument("--input-image", type=Path, default=None)
-    parser.add_argument("--vendor-index-csv", type=Path, default=Path("data/interim/emoji_editing/metadata/vendor_image_index.csv"))
-    parser.add_argument("--vendor", default="Apple")
-    parser.add_argument("--emoji-key", default=None, help="Catalog key like Apple::1. Used when --input-image is not provided.")
-    parser.add_argument("--instruction", required=True)
-    parser.add_argument("--precision", choices=["fp32", "fp16", "bf16"], default="fp16")
-    parser.add_argument("--device", default=None)
-    parser.add_argument("--steps", type=int, default=30)
-    parser.add_argument("--guidance-scale", type=float, default=4.5)
-    parser.add_argument("--image-guidance-scale", type=float, default=1.8)
-    parser.add_argument("--seed", type=int, default=-1)
-    parser.add_argument("--resolution", type=int, default=256)
-    parser.add_argument("--scheduler", choices=["euler_a", "dpm"], default="euler_a")
-    parser.add_argument("--extra-style-hint", default=None)
-    parser.add_argument("--output-image", type=Path, default=Path("artifacts/emoji_editor_output.png"))
-    parser.add_argument("--output-metadata", type=Path, default=Path("artifacts/emoji_editor_output.json"))
-    return parser.parse_args()
+@dataclass(frozen=True)
+class InferenceConfig:
+    base_model: str
+    lora_path: Path
+    input_image: Path | None
+    vendor_index_csv: Path
+    vendor: str
+    emoji_key: str | None
+    instruction: str
+    precision: str
+    device: str | None
+    steps: int
+    guidance_scale: float
+    image_guidance_scale: float
+    seed: int
+    resolution: int
+    scheduler: str
+    extra_style_hint: str | None
+    output_image: Path
+    output_metadata: Path
 
 
-def resolve_source(args: argparse.Namespace) -> tuple[Image.Image, str | None, str | None]:
-    if args.input_image is not None:
-        with Image.open(args.input_image) as image:
+# 在这里修改推理脚本配置。
+INFER_CONFIG = InferenceConfig(
+    base_model="timbrooks/instruct-pix2pix",  # 推理底座模型。
+    lora_path=Path("artifacts/emoji_diffusion_editor/lora_final"),  # 训练完成后的 LoRA 目录。
+    input_image=None,  # 填本地图片路径时会优先使用该图片；保持 None 时走内置 emoji。
+    vendor_index_csv=Path("data/interim/emoji_editing/metadata/vendor_image_index.csv"),  # 内置 emoji 索引表。
+    vendor="Apple",  # 当 input_image 为 None 时，默认选择哪个平台风格。
+    emoji_key=None,  # 指定某个内置 emoji 的 key；保持 None 时自动选该 vendor 的第一张。
+    instruction="Add sunglasses and make the face more confident.",  # 自然语言编辑指令。
+    precision="fp16",  # RTX 单卡推理通常先用 fp16。
+    device=None,  # 强制设备，例如 'cuda:0'；保持 None 时自动选择。
+    steps=30,  # 推理步数。
+    guidance_scale=4.5,  # 文本 guidance 强度。
+    image_guidance_scale=1.8,  # 源图像保持强度。
+    seed=-1,  # -1 表示随机；填固定整数可复现。
+    resolution=256,  # 推理分辨率。
+    scheduler="euler_a",  # 采样器，可选 'euler_a' 或 'dpm'。
+    extra_style_hint=None,  # 额外风格提示词，不需要时保持 None。
+    output_image=Path("artifacts/emoji_editor_output.png"),  # 输出图片路径。
+    output_metadata=Path("artifacts/emoji_editor_output.json"),  # 输出 metadata 路径。
+)
+
+
+def resolve_source(config: InferenceConfig) -> tuple[Image.Image, str | None, str | None]:
+    if config.input_image is not None:
+        with Image.open(config.input_image) as image:
             return image.convert("RGBA").copy(), None, None
 
-    entries = load_vendor_catalog(args.vendor_index_csv)
+    entries = load_vendor_catalog(config.vendor_index_csv)
     lookup = {entry.key: entry for entry in entries}
-    if args.emoji_key is None:
-        vendor_entries = [entry for entry in entries if entry.vendor == args.vendor]
+    if config.emoji_key is None:
+        vendor_entries = [entry for entry in entries if entry.vendor == config.vendor]
         if not vendor_entries:
-            raise ValueError(f"No entries found for vendor {args.vendor}")
+            raise ValueError(f"No entries found for vendor {config.vendor}")
         entry = vendor_entries[0]
     else:
-        entry = lookup[args.emoji_key]
+        entry = lookup[config.emoji_key]
 
     with Image.open(entry.image_path) as image:
         return image.convert("RGBA").copy(), entry.name, entry.vendor
 
 
 def main() -> int:
-    args = parse_args()
-    source_image, source_name, source_vendor = resolve_source(args)
+    config = INFER_CONFIG
+    source_image, source_name, source_vendor = resolve_source(config)
     result, metadata = edit_emoji_image(
         source_image=source_image,
-        instruction=args.instruction,
-        base_model=args.base_model,
-        lora_path=args.lora_path if Path(args.lora_path).exists() else None,
-        precision=args.precision,
-        device=args.device,
+        instruction=config.instruction,
+        base_model=config.base_model,
+        lora_path=config.lora_path if config.lora_path.exists() else None,
+        precision=config.precision,
+        device=config.device,
         source_name=source_name,
         source_vendor=source_vendor,
-        steps=args.steps,
-        guidance_scale=args.guidance_scale,
-        image_guidance_scale=args.image_guidance_scale,
-        seed=args.seed,
-        resolution=args.resolution,
-        scheduler_name=args.scheduler,
-        extra_style_hint=args.extra_style_hint,
+        steps=config.steps,
+        guidance_scale=config.guidance_scale,
+        image_guidance_scale=config.image_guidance_scale,
+        seed=config.seed,
+        resolution=config.resolution,
+        scheduler_name=config.scheduler,
+        extra_style_hint=config.extra_style_hint,
     )
-    args.output_image.parent.mkdir(parents=True, exist_ok=True)
-    args.output_metadata.parent.mkdir(parents=True, exist_ok=True)
-    result.save(args.output_image)
-    args.output_metadata.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(args.output_image)
-    print(args.output_metadata)
+    config.output_image.parent.mkdir(parents=True, exist_ok=True)
+    config.output_metadata.parent.mkdir(parents=True, exist_ok=True)
+    result.save(config.output_image)
+    config.output_metadata.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(config.output_image)
+    print(config.output_metadata)
     return 0
 
 
