@@ -28,12 +28,8 @@ pip install -r requirements-train.txt
 
 ### 2. 修改脚本顶部配置区
 
-现在所有入口脚本都改成了“直接在代码里改配置”的方式，不再依赖项目参数命令行传参。
-
-你只需要打开对应脚本，在文件顶部的配置区修改参数即可。每个字段旁边都写了中文注释，常改的位置主要是：
-
-- [scripts/download_kaggle_emoji_data.py](/Users/ningzd/Desktop/Pic_Gen/scripts/download_kaggle_emoji_data.py)：下载目录、是否强制重下
-- [scripts/preprocess_emoji_editing_data.py](/Users/ningzd/Desktop/Pic_Gen/scripts/preprocess_emoji_editing_data.py)：预处理目录、是否强制重建
+- [scripts/download_kaggle_emoji_data.py](/Users/ningzd/Desktop/Pic_Gen/scripts/download_kaggle_emoji_data.py)：下载目录
+- [scripts/preprocess_emoji_editing_data.py](/Users/ningzd/Desktop/Pic_Gen/scripts/preprocess_emoji_editing_data.py)：预处理目录
 - [scripts/train_emoji_diffusion_editor.py](/Users/ningzd/Desktop/Pic_Gen/scripts/train_emoji_diffusion_editor.py)：diffusion 训练超参数
 - [scripts/train_multimodal_conditioner.py](/Users/ningzd/Desktop/Pic_Gen/scripts/train_multimodal_conditioner.py)：多模态编码器训练超参数
 - [scripts/infer_emoji_editor.py](/Users/ningzd/Desktop/Pic_Gen/scripts/infer_emoji_editor.py)：推理脚本配置
@@ -46,19 +42,19 @@ python scripts/download_kaggle_emoji_data.py
 python scripts/preprocess_emoji_editing_data.py
 ```
 
-如果你想重新生成全部中间文件，把 [scripts/preprocess_emoji_editing_data.py](/Users/ningzd/Desktop/Pic_Gen/scripts/preprocess_emoji_editing_data.py) 里的 `force_rebuild` 改成 `True` 再运行一次。
+如需重新生成中间文件，将 [scripts/preprocess_emoji_editing_data.py](/Users/ningzd/Desktop/Pic_Gen/scripts/preprocess_emoji_editing_data.py) 里的 `force_rebuild` 改成 `True` 再运行。
 
 ### 4. 单机单卡 RTX 训练
 
-对大多数 RTX 显卡，推理通常优先用 `fp16`，训练可以先试 `bf16`；如果你本机不稳定，再改成 `fp16`。
+推理通常优先用 `fp16`，训练可以尝试 `bf16`；如果不稳定，再改成 `fp16`。
 
-先在 [scripts/train_emoji_diffusion_editor.py](/Users/ningzd/Desktop/Pic_Gen/scripts/train_emoji_diffusion_editor.py) 顶部改好 `TRAIN_CONFIG`，再直接运行：
+在 [scripts/train_emoji_diffusion_editor.py](/Users/ningzd/Desktop/Pic_Gen/scripts/train_emoji_diffusion_editor.py) 顶部设置 `TRAIN_CONFIG`
 
 ```bash
 python scripts/train_emoji_diffusion_editor.py
 ```
 
-单卡常改参数：
+常用参数：
 
 - `resolution`
 - `train_batch_size`
@@ -67,7 +63,7 @@ python scripts/train_emoji_diffusion_editor.py
 - `mixed_precision`
 - `enable_xformers_memory_efficient_attention`
 
-如果你也要训练多模态条件编码器，先在 [scripts/train_multimodal_conditioner.py](/Users/ningzd/Desktop/Pic_Gen/scripts/train_multimodal_conditioner.py) 里修改 `TRAIN_CONFIG`，然后运行：
+如果要训练多模态条件编码器，先在 [scripts/train_multimodal_conditioner.py](/Users/ningzd/Desktop/Pic_Gen/scripts/train_multimodal_conditioner.py) 里修改 `TRAIN_CONFIG`，然后运行：
 
 ```bash
 python scripts/train_multimodal_conditioner.py
@@ -87,13 +83,11 @@ python app.py
 python scripts/infer_emoji_editor.py
 ```
 
-如果要直接对本地图片推理，就把 [scripts/infer_emoji_editor.py](/Users/ningzd/Desktop/Pic_Gen/scripts/infer_emoji_editor.py) 顶部的 `input_image` 改成你的图片路径，并把 `instruction` 改成目标编辑要求。
+如果直接对本地图片推理，将 [scripts/infer_emoji_editor.py](/Users/ningzd/Desktop/Pic_Gen/scripts/infer_emoji_editor.py) 顶部的 `input_image` 改成图片路径，并把 `instruction` 改成目标编辑要求。
 
 ## 多卡集群训练
 
 ### 单机多卡服务器
-
-如果你要在单机多卡服务器上训练，脚本内部超参数仍然在代码顶部修改；命令行只负责拉起多进程。
 
 先运行一次：
 
@@ -101,7 +95,7 @@ python scripts/infer_emoji_editor.py
 accelerate config
 ```
 
-然后直接启动：
+然后启动：
 
 ```bash
 accelerate launch scripts/train_emoji_diffusion_editor.py
@@ -115,11 +109,11 @@ torchrun --standalone --nproc_per_node=8 scripts/train_multimodal_conditioner.py
 
 ### 多机多卡集群
 
-如果是多机训练，同样先在脚本顶部配好超参数，再由集群调度器或 `accelerate` 负责分布式拓扑。推荐先在每台机器上完成相同的数据准备和环境安装，然后执行：
+先在脚本顶部配好超参数，再由集群调度器或 `accelerate` 负责分布式拓扑。推荐先在每台机器上完成相同的数据准备和环境安装，然后执行：
 
 ```bash
 accelerate config
 accelerate launch scripts/train_emoji_diffusion_editor.py
 ```
 
-如果你的集群是通过 Slurm、MPI 或平台侧封装来启动多机任务，也只需要保持脚本本身不带项目参数，交给集群环境注入并行配置即可。
+如果集群是通过 Slurm、MPI 或平台侧封装来启动多机任务，只需要保持脚本本身不带项目参数，交给集群环境注入并行配置即可。
