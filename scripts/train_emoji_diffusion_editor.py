@@ -89,7 +89,7 @@ TRAIN_CONFIG = DiffusionTrainConfig(
     resolution=256,  # 训练分辨率。
     train_batch_size=32,  # 单卡训练 batch size。
     eval_batch_size=8,  # 预留给后续扩展验证批处理。
-    dataloader_num_workers=8,  # DataLoader worker 数量。
+    dataloader_num_workers=0,  # 首次排查卡住建议先设为 0；稳定后再逐步加大。
     epochs=30,  # 训练轮数。
     max_train_steps=None,  # 固定总步数时填整数；None 表示按 epochs 自动推算。
     learning_rate=1e-4,  # 学习率。
@@ -208,6 +208,11 @@ def apply_conditioning_dropout(
 
 def unwrap(accelerator: Accelerator, model: Any) -> Any:
     return accelerator.unwrap_model(model)
+
+
+def rank0_print(accelerator: Accelerator, message: str) -> None:
+    if accelerator.is_main_process:
+        print(message, flush=True)
 
 
 def save_lora_weights(
@@ -339,21 +344,35 @@ def main() -> int:
             json.dumps(asdict(config), ensure_ascii=False, indent=2, default=str),
             encoding="utf-8",
         )
+    rank0_print(accelerator, f"[stage] output dir ready: {config.output_dir}")
     if config.seed is not None:
         set_seed(config.seed)
     if config.allow_tf32 and torch.cuda.is_available():
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.allow_tf32 = True
 
+    if torch.cuda.is_available():
+        rank0_print(accelerator, f"[stage] cuda device: {torch.cuda.get_device_name(accelerator.device)}")
+    else:
+        rank0_print(accelerator, "[stage] CUDA not detected, training will likely be extremely slow.")
+
     from diffusers import AutoencoderKL, DDPMScheduler, UNet2DConditionModel
     from diffusers.optimization import get_scheduler
     from peft import LoraConfig
 
+    rank0_print(accelerator, f"[stage] loading tokenizer from {config.pretrained_model_name_or_path}")
     tokenizer = AutoTokenizer.from_pretrained(config.pretrained_model_name_or_path, subfolder="tokenizer", use_fast=False)
+    rank0_print(accelerator, "[stage] tokenizer ready")
+
+    rank0_print(accelerator, "[stage] loading noise scheduler")
     noise_scheduler = DDPMScheduler.from_pretrained(config.pretrained_model_name_or_path, subfolder="scheduler")
+    rank0_print(accelerator, "[stage] loading text encoder")
     text_encoder = CLIPTextModel.from_pretrained(config.pretrained_model_name_or_path, subfolder="text_encoder")
+    rank0_print(accelerator, "[stage] loading VAE")
     vae = AutoencoderKL.from_pretrained(config.pretrained_model_name_or_path, subfolder="vae")
+    rank0_print(accelerator, "[stage] loading UNet")
     unet = UNet2DConditionModel.from_pretrained(config.pretrained_model_name_or_path, subfolder="unet")
+    rank0_print(accelerator, "[stage] pretrained modules ready")
 
     vae.requires_grad_(False)
     text_encoder.requires_grad_(False)
@@ -384,6 +403,7 @@ def main() -> int:
 
     maybe_enable_xformers(unet, text_encoder, config.enable_xformers_memory_efficient_attention)
 
+    rank0_print(accelerator, f"[stage] building datasets from {config.pair_csv}")
     prompt_config = PromptBuildConfig()
     train_dataset = EmojiDiffusionEditDataset(
         pair_csv_path=config.pair_csv,
@@ -399,6 +419,10 @@ def main() -> int:
         prompt_config=prompt_config,
         max_samples=config.max_val_samples,
     )
+    rank0_print(
+        accelerator,
+        f"[stage] dataset ready: train={len(train_dataset)} val={len(validation_dataset)} resolution={config.resolution}",
+    )
     collator = EmojiDiffusionCollator(tokenizer=tokenizer, max_length=tokenizer.model_max_length)
     train_dataloader = DataLoader(
         train_dataset,
@@ -408,6 +432,10 @@ def main() -> int:
         num_workers=config.dataloader_num_workers,
         pin_memory=True,
         persistent_workers=config.dataloader_num_workers > 0,
+    )
+    rank0_print(
+        accelerator,
+        f"[stage] dataloader ready: batch={config.train_batch_size} workers={config.dataloader_num_workers}",
     )
     params_to_optimize = [param for param in unet.parameters() if param.requires_grad]
     if config.train_text_encoder_lora:
@@ -435,9 +463,11 @@ def main() -> int:
         num_training_steps=config.max_train_steps * accelerator.num_processes,
     )
 
+    rank0_print(accelerator, "[stage] preparing accelerator modules")
     unet, text_encoder, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
         unet, text_encoder, optimizer, train_dataloader, lr_scheduler
     )
+    rank0_print(accelerator, "[stage] accelerator prepare done")
 
     weight_dtype = get_weight_dtype(accelerator)
     vae.to(accelerator.device, dtype=weight_dtype)
@@ -456,6 +486,10 @@ def main() -> int:
             first_epoch = int(state.get("epoch", 0))
 
     progress_bar = tqdm(range(global_step, config.max_train_steps), disable=not accelerator.is_local_main_process, desc="Training")
+    rank0_print(
+        accelerator,
+        f"[stage] start training: steps={config.max_train_steps} epochs={config.epochs} precision={config.mixed_precision}",
+    )
 
     for epoch in range(first_epoch, config.epochs):
         unet.train()
