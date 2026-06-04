@@ -90,8 +90,8 @@ TRAIN_CONFIG = DiffusionTrainConfig(
     resolution=256,  # 训练分辨率。
     train_batch_size=48,  # 单卡训练 batch size。
     eval_batch_size=8,  # 预留给后续扩展验证批处理。
-    dataloader_num_workers=0,  # 首次排查卡住建议先设为 0；稳定后再逐步加大。
-    epochs=30,  # 训练轮数。
+    dataloader_num_workers=8,  # 数据加载并行进程数（本机 32 核）；仍卡再回退到 0 排查。
+    epochs=30,  # 训练轮数。 
     max_train_steps=None,  # 固定总步数时填整数；None 表示按 epochs 自动推算。
     learning_rate=1e-4,  # 学习率。
     scale_lr=True,  # 是否按总 batch 自动缩放学习率。
@@ -112,7 +112,7 @@ TRAIN_CONFIG = DiffusionTrainConfig(
     lora_target_modules=("to_q", "to_k", "to_v", "to_out.0"),  # UNet LoRA 注入位置。
     train_text_encoder_lora=True,  # 是否同时训练文本编码器 LoRA。
     conditioning_dropout_prob=0.05,  # 条件 dropout 概率。
-    gradient_checkpointing=True,  # 是否启用梯度检查点。
+    gradient_checkpointing=False,  # LoRA 显存占用小，关闭以提速；若 OOM 再开启。
     enable_xformers_memory_efficient_attention=False,  # 安装 xformers 后可改成 True。
     allow_tf32=True,  # NVIDIA Ampere/Ada/Hopper 推荐开启。
     use_8bit_adam=False,  # 安装 bitsandbytes 后可改成 True。
@@ -431,6 +431,7 @@ def main() -> int:
         num_workers=config.dataloader_num_workers,
         pin_memory=True,
         persistent_workers=config.dataloader_num_workers > 0,
+        prefetch_factor=4 if config.dataloader_num_workers > 0 else None,
     )
     rank0_print(
         accelerator,
@@ -503,10 +504,10 @@ def main() -> int:
 
         for batch in train_dataloader:
             with accelerator.accumulate(unet):
-                edited_pixel_values = batch["edited_pixel_values"].to(accelerator.device, dtype=weight_dtype)
-                original_pixel_values = batch["original_pixel_values"].to(accelerator.device, dtype=weight_dtype)
-                input_ids = batch["input_ids"].to(accelerator.device)
-                attention_mask = batch["attention_mask"].to(accelerator.device)
+                edited_pixel_values = batch["edited_pixel_values"].to(accelerator.device, dtype=weight_dtype, non_blocking=True)
+                original_pixel_values = batch["original_pixel_values"].to(accelerator.device, dtype=weight_dtype, non_blocking=True)
+                input_ids = batch["input_ids"].to(accelerator.device, non_blocking=True)
+                attention_mask = batch["attention_mask"].to(accelerator.device, non_blocking=True)
 
                 latents = vae.encode(edited_pixel_values).latent_dist.sample() * vae.config.scaling_factor
                 # InstructPix2Pix 的条件图 latent 不乘 scaling_factor，需与推理 pipeline 的
