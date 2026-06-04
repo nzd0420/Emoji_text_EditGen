@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import csv
 import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -13,6 +12,9 @@ import torch
 from PIL import Image
 from torch import Tensor
 from torch.utils.data import Dataset
+
+from .image_utils import WHITE_BACKGROUND
+from .io_utils import read_csv_rows
 
 CLIP_RGB_MEAN = (0.48145466, 0.4578275, 0.40821073)
 CLIP_RGB_STD = (0.26862954, 0.26130258, 0.27577711)
@@ -87,12 +89,6 @@ class MultimodalBatch(dict):
         return moved
 
 
-def _read_rows(csv_path: str | Path) -> list[dict[str, str]]:
-    path = Path(csv_path)
-    with path.open(encoding="utf-8", newline="") as handle:
-        return list(csv.DictReader(handle))
-
-
 def build_label_vocab_from_rows(rows: list[dict[str, str]]) -> MultimodalLabelVocab:
     emotions = sorted({row["source_emotion"] for row in rows} | {row["target_emotion"] for row in rows})
     sentiments = sorted({row["source_sentiment"] for row in rows} | {row["target_sentiment"] for row in rows})
@@ -107,7 +103,7 @@ def build_label_vocab_from_rows(rows: list[dict[str, str]]) -> MultimodalLabelVo
 
 
 def build_label_vocab_from_csv(csv_path: str | Path) -> MultimodalLabelVocab:
-    return build_label_vocab_from_rows(_read_rows(csv_path))
+    return build_label_vocab_from_rows(read_csv_rows(csv_path))
 
 
 def save_label_vocab(vocab: MultimodalLabelVocab, output_path: str | Path) -> None:
@@ -147,11 +143,11 @@ class EmojiEditMultimodalDataset(Dataset[MultimodalSample]):
         vocab: MultimodalLabelVocab,
         image_size: int = 224,
         max_samples: int | None = None,
-        background_rgb: tuple[int, int, int] = (255, 255, 255),
+        background_rgb: tuple[int, int, int] = WHITE_BACKGROUND,
         rgb_mean: tuple[float, float, float] = CLIP_RGB_MEAN,
         rgb_std: tuple[float, float, float] = CLIP_RGB_STD,
     ) -> None:
-        rows = [row for row in _read_rows(pair_csv_path) if row["split"] == split]
+        rows = [row for row in read_csv_rows(pair_csv_path) if row["split"] == split]
         if max_samples is not None:
             rows = rows[:max_samples]
         self.rows = rows

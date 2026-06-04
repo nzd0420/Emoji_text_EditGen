@@ -189,8 +189,9 @@ def is_human_face_emoji(name: str) -> bool:
     return not any(token in lowered for token in EXCLUDE_NAME_KEYWORDS)
 
 
-def infer_emotion(name: str) -> str:
-    text = name.lower()
+def infer_emotion(text: str) -> str:
+    """Heuristic emotion label from an already-lowercased emoji name."""
+
     rules = [
         ("love", ("heart", "kiss")),
         ("joy", ("laugh", "grinning", "beaming", "party", "partying", "zany", "smiling", "hugging", "savoring")),
@@ -210,8 +211,9 @@ def infer_emotion(name: str) -> str:
     return "other"
 
 
-def infer_sentiment(name: str, emotion: str) -> str:
-    text = name.lower()
+def infer_sentiment(text: str, emotion: str) -> str:
+    """Heuristic sentiment label from an already-lowercased emoji name."""
+
     if emotion in {"joy", "love", "cool", "playful"}:
         return "positive"
     if emotion in {"sad", "fear", "angry", "sick"}:

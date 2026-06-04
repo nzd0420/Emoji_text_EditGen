@@ -11,15 +11,9 @@ import torch
 from PIL import Image
 
 from .catalog import EmojiCatalogEntry, catalog_lookup, entries_for_vendor, load_vendor_catalog, vendors_from_catalog
+from .image_utils import WHITE_BACKGROUND, pad_to_square
 from .prompting import DEFAULT_NEGATIVE_PROMPT, PromptBuildConfig, build_inference_prompt
-
-
-def _infer_dtype(precision: str) -> torch.dtype:
-    if precision == "bf16":
-        return torch.bfloat16
-    if precision == "fp16":
-        return torch.float16
-    return torch.float32
+from .torch_utils import resolve_dtype
 
 
 def _resolve_device(device: str | None) -> str:
@@ -28,22 +22,12 @@ def _resolve_device(device: str | None) -> str:
     return "cuda" if torch.cuda.is_available() else "cpu"
 
 
-def _pad_to_square(image: Image.Image, background_rgb: tuple[int, int, int]) -> Image.Image:
-    width, height = image.size
-    side = max(width, height)
-    canvas = Image.new("RGBA", (side, side), background_rgb + (255,))
-    x = (side - width) // 2
-    y = (side - height) // 2
-    canvas.alpha_composite(image.convert("RGBA"), dest=(x, y))
-    return canvas
-
-
 def prepare_input_image(
     image: Image.Image,
     resolution: int,
-    background_rgb: tuple[int, int, int] = (255, 255, 255),
+    background_rgb: tuple[int, int, int] = WHITE_BACKGROUND,
 ) -> Image.Image:
-    squared = _pad_to_square(image, background_rgb=background_rgb)
+    squared = pad_to_square(image, background_rgb=background_rgb)
     return squared.resize((resolution, resolution), resample=Image.LANCZOS).convert("RGB")
 
 
@@ -62,7 +46,7 @@ def load_editor_pipeline(
         StableDiffusionInstructPix2PixPipeline,
     )
 
-    torch_dtype = _infer_dtype(precision)
+    torch_dtype = resolve_dtype(precision)
     resolved_device = _resolve_device(device)
     pipe = StableDiffusionInstructPix2PixPipeline.from_pretrained(
         base_model,
@@ -125,9 +109,9 @@ def edit_emoji_image(
     )
 
     actual_seed = seed if seed >= 0 else random.randint(0, 2**31 - 1)
-    generator = None
-    if _resolve_device(device).startswith("cuda"):
-        generator = torch.Generator(device=_resolve_device(device)).manual_seed(actual_seed)
+    resolved_device = _resolve_device(device)
+    if resolved_device.startswith("cuda"):
+        generator = torch.Generator(device=resolved_device).manual_seed(actual_seed)
     else:
         generator = torch.Generator().manual_seed(actual_seed)
 

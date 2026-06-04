@@ -9,7 +9,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from emoji_editing.catalog import load_vendor_catalog
+from emoji_editing.catalog import catalog_lookup, load_vendor_catalog
 from emoji_editing.diffusion_inference import edit_emoji_image
 
 
@@ -64,7 +64,7 @@ def resolve_source(config: InferenceConfig) -> tuple[Image.Image, str | None, st
             return image.convert("RGBA").copy(), None, None
 
     entries = load_vendor_catalog(config.vendor_index_csv)
-    lookup = {entry.key: entry for entry in entries}
+    lookup = catalog_lookup(entries)
     if config.emoji_key is None:
         vendor_entries = [entry for entry in entries if entry.vendor == config.vendor]
         if not vendor_entries:

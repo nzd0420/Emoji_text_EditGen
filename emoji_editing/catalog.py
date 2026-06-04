@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-import csv
 from dataclasses import dataclass
 from pathlib import Path
+
+from .io_utils import read_csv_rows
 
 
 @dataclass(frozen=True)
@@ -24,16 +25,10 @@ class EmojiCatalogEntry:
         return f"{self.emoji} {self.name}"
 
 
-def _read_rows(csv_path: str | Path) -> list[dict[str, str]]:
-    path = Path(csv_path)
-    with path.open(encoding="utf-8", newline="") as handle:
-        return list(csv.DictReader(handle))
-
-
 def load_vendor_catalog(vendor_index_csv: str | Path) -> list[EmojiCatalogEntry]:
     """Load the processed vendor image index into UI-friendly entries."""
 
-    rows = _read_rows(vendor_index_csv)
+    rows = read_csv_rows(vendor_index_csv)
     entries = [
         EmojiCatalogEntry(
             key=f"{row['vendor']}::{row['row_id']}",

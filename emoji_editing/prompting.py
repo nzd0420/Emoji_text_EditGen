@@ -43,9 +43,11 @@ def build_training_prompt(
     attribute_delta = row.get("attribute_delta", "").strip()
 
     if rng.random() > config.structured_prompt_probability:
-        return f"{config.prefix}. {config.style_hint}. Request: {raw_instruction}"
+        return f"Instruction: {raw_instruction} {config.prefix}. {config.style_hint}."
 
+    # 指令是最关键信息，放在最前面，避免 CLIP 77-token 截断时被丢弃。
     segments = [
+        f"Instruction: {raw_instruction}",
         f"{config.prefix}.",
         config.style_hint + ".",
         f"Task: {task_type}.",
@@ -63,7 +65,6 @@ def build_training_prompt(
     if attribute_delta and rng.random() < config.include_attribute_delta_probability:
         segments.append(f"Requested change: {attribute_delta.replace('|', '; ')}.")
 
-    segments.append(f"Instruction: {raw_instruction}")
     return " ".join(segment for segment in segments if segment)
 
 
@@ -79,7 +80,9 @@ def build_inference_prompt(
     if config is None:
         config = PromptBuildConfig()
 
+    # 与训练保持一致：指令前置，确保 77-token 截断时不会丢失。
     segments = [
+        f"Instruction: {instruction.strip()}",
         f"{config.prefix}.",
         config.style_hint + ".",
     ]
@@ -89,5 +92,4 @@ def build_inference_prompt(
         segments.append(f"Keep the overall {source_vendor} emoji styling unless the instruction changes it.")
     if extra_style_hint:
         segments.append(extra_style_hint.strip().rstrip(".") + ".")
-    segments.append(f"Instruction: {instruction.strip()}")
     return " ".join(segment for segment in segments if segment)

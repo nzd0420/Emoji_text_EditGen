@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import csv
 import random
 from dataclasses import dataclass
 from pathlib import Path
@@ -14,35 +13,20 @@ from PIL import Image
 from torch import Tensor
 from torch.utils.data import Dataset
 
+from .image_utils import WHITE_BACKGROUND, pad_to_square
+from .io_utils import read_csv_rows
 from .prompting import PromptBuildConfig, build_training_prompt
-
-
-def _read_rows(csv_path: str | Path) -> list[dict[str, str]]:
-    path = Path(csv_path)
-    with path.open(encoding="utf-8", newline="") as handle:
-        return list(csv.DictReader(handle))
-
-
-def _pad_to_square(image: Image.Image, background_rgb: tuple[int, int, int]) -> Image.Image:
-    width, height = image.size
-    side = max(width, height)
-    canvas = Image.new("RGBA", (side, side), background_rgb + (255,))
-    x = (side - width) // 2
-    y = (side - height) // 2
-    canvas.alpha_composite(image, dest=(x, y))
-    return canvas
 
 
 def load_editor_image(
     image_path: str | Path,
     resolution: int,
-    background_rgb: tuple[int, int, int] = (255, 255, 255),
+    background_rgb: tuple[int, int, int] = WHITE_BACKGROUND,
     interpolation: int = Image.LANCZOS,
 ) -> Tensor:
     path = Path(image_path)
     with Image.open(path) as image:
-        rgba = image.convert("RGBA")
-        squared = _pad_to_square(rgba, background_rgb=background_rgb)
+        squared = pad_to_square(image, background_rgb=background_rgb)
         resized = squared.resize((resolution, resolution), resample=interpolation).convert("RGB")
 
     array = np.asarray(resized, dtype=np.float32) / 127.5 - 1.0
@@ -73,10 +57,10 @@ class EmojiDiffusionEditDataset(Dataset[DiffusionExample]):
         resolution: int = 256,
         prompt_config: PromptBuildConfig | None = None,
         max_samples: int | None = None,
-        background_rgb: tuple[int, int, int] = (255, 255, 255),
+        background_rgb: tuple[int, int, int] = WHITE_BACKGROUND,
         interpolation: int = Image.LANCZOS,
     ) -> None:
-        rows = [row for row in _read_rows(pair_csv_path) if row["split"] == split]
+        rows = [row for row in read_csv_rows(pair_csv_path) if row["split"] == split]
         if max_samples is not None:
             rows = rows[:max_samples]
         self.rows = rows

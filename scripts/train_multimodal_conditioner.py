@@ -28,6 +28,7 @@ from emoji_editing import (
     build_label_vocab_from_csv,
     save_label_vocab,
 )
+from emoji_editing.torch_utils import autocast_dtype as resolve_autocast_dtype
 
 
 @dataclass
@@ -223,11 +224,7 @@ def build_scheduler(optimizer: AdamW, total_steps: int, warmup_ratio: float, min
 
 
 def get_autocast_dtype(precision: str) -> torch.dtype | None:
-    if precision == "bf16":
-        return torch.bfloat16
-    if precision == "fp16":
-        return torch.float16
-    return None
+    return resolve_autocast_dtype(precision)
 
 
 def move_batch_to_device(batch: dict[str, object], device: torch.device) -> dict[str, object]:

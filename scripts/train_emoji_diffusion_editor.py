@@ -31,6 +31,7 @@ if project_root not in sys.path:
 
 from emoji_editing.diffusion_data import EmojiDiffusionCollator, EmojiDiffusionEditDataset
 from emoji_editing.prompting import DEFAULT_NEGATIVE_PROMPT, PromptBuildConfig
+from emoji_editing.torch_utils import resolve_dtype
 
 
 @dataclass
@@ -87,7 +88,7 @@ TRAIN_CONFIG = DiffusionTrainConfig(
     pair_csv=Path("data/interim/emoji_editing/metadata/all_edit_pairs.csv"),  # 训练样本表路径。
     output_dir=Path("artifacts/emoji_diffusion_editor"),  # LoRA、日志和验证图输出目录。
     resolution=256,  # 训练分辨率。
-    train_batch_size=32,  # 单卡训练 batch size。
+    train_batch_size=48,  # 单卡训练 batch size。
     eval_batch_size=8,  # 预留给后续扩展验证批处理。
     dataloader_num_workers=0,  # 首次排查卡住建议先设为 0；稳定后再逐步加大。
     epochs=30,  # 训练轮数。
@@ -103,7 +104,7 @@ TRAIN_CONFIG = DiffusionTrainConfig(
     adam_epsilon=1e-8,  # AdamW epsilon。
     max_grad_norm=1.0,  # 梯度裁剪上限。
     gradient_accumulation_steps=1,  # 梯度累积步数。
-    mixed_precision="fp16",  # RTX 40 系列优先试 bf16；不稳定时改 fp16。
+    mixed_precision="bf16",  # RTX 40 系列优先试 bf16；不稳定时改 fp16。
     seed=2024533116,  # 随机种子。
     rank=16,  # LoRA rank。
     lora_alpha=16,  # LoRA alpha。
@@ -131,11 +132,7 @@ TRAIN_CONFIG = DiffusionTrainConfig(
 
 
 def get_weight_dtype(accelerator: Accelerator) -> torch.dtype:
-    if accelerator.mixed_precision == "fp16":
-        return torch.float16
-    if accelerator.mixed_precision == "bf16":
-        return torch.bfloat16
-    return torch.float32
+    return resolve_dtype(accelerator.mixed_precision)
 
 
 def maybe_enable_xformers(unet: Any, text_encoder: Any, enabled: bool) -> None:
@@ -189,16 +186,20 @@ def apply_conditioning_dropout(
     text_keep_mask = (torch.rand(batch_size, device=device) > dropout_prob).view(batch_size, 1, 1)
     image_keep_mask = (torch.rand(batch_size, device=device) > dropout_prob).view(batch_size, 1, 1, 1)
 
+    # 空串的 token 化结果对每个样本都相同，token 化一次再按 batch 复制即可
+    # （文本编码器在训练，其前向无法跨步缓存，因此仍每步前向一次）。
     null_tokens = tokenizer(
-        [""] * batch_size,
+        [""],
         padding="max_length",
         truncation=True,
         max_length=tokenizer.model_max_length,
         return_tensors="pt",
     )
+    null_input_ids = null_tokens.input_ids.to(device).repeat(batch_size, 1)
+    null_attention_mask = null_tokens.attention_mask.to(device).repeat(batch_size, 1)
     null_hidden_states = text_encoder(
-        input_ids=null_tokens.input_ids.to(device),
-        attention_mask=null_tokens.attention_mask.to(device),
+        input_ids=null_input_ids,
+        attention_mask=null_attention_mask,
         return_dict=True,
     ).last_hidden_state
     encoder_hidden_states = torch.where(text_keep_mask, encoder_hidden_states, null_hidden_states)
@@ -340,10 +341,6 @@ def main() -> int:
 
     if accelerator.is_main_process:
         config.output_dir.mkdir(parents=True, exist_ok=True)
-        (config.output_dir / "train_args.json").write_text(
-            json.dumps(asdict(config), ensure_ascii=False, indent=2, default=str),
-            encoding="utf-8",
-        )
     rank0_print(accelerator, f"[stage] output dir ready: {config.output_dir}")
     if config.seed is not None:
         set_seed(config.seed)
@@ -351,10 +348,12 @@ def main() -> int:
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.allow_tf32 = True
 
-    if torch.cuda.is_available():
-        rank0_print(accelerator, f"[stage] cuda device: {torch.cuda.get_device_name(accelerator.device)}")
-    else:
-        rank0_print(accelerator, "[stage] CUDA not detected, training will likely be extremely slow.")
+    if not torch.cuda.is_available():
+        raise RuntimeError(
+            "CUDA is required for this training script, but torch.cuda.is_available() is False. "
+            "请检查 GPU 驱动与 CUDA 版本的 PyTorch 安装。"
+        )
+    rank0_print(accelerator, f"[stage] cuda device: {torch.cuda.get_device_name(accelerator.device)}")
 
     from diffusers import AutoencoderKL, DDPMScheduler, UNet2DConditionModel
     from diffusers.optimization import get_scheduler
@@ -456,6 +455,13 @@ def main() -> int:
     else:
         config.epochs = math.ceil(config.max_train_steps / steps_per_epoch)
 
+    # 在 scale_lr 与步数/轮数推算完成后再落盘，确保记录的是真实使用的超参数。
+    if accelerator.is_main_process:
+        (config.output_dir / "train_args.json").write_text(
+            json.dumps(asdict(config), ensure_ascii=False, indent=2, default=str),
+            encoding="utf-8",
+        )
+
     lr_scheduler = get_scheduler(
         config.lr_scheduler,
         optimizer=optimizer,
@@ -503,7 +509,9 @@ def main() -> int:
                 attention_mask = batch["attention_mask"].to(accelerator.device)
 
                 latents = vae.encode(edited_pixel_values).latent_dist.sample() * vae.config.scaling_factor
-                original_image_embeds = vae.encode(original_pixel_values).latent_dist.mode() * vae.config.scaling_factor
+                # InstructPix2Pix 的条件图 latent 不乘 scaling_factor，需与推理 pipeline 的
+                # prepare_image_latents（mode/argmax，未缩放）保持一致。
+                original_image_embeds = vae.encode(original_pixel_values).latent_dist.mode()
 
                 noise = torch.randn_like(latents)
                 timesteps = torch.randint(0, noise_scheduler.config.num_train_timesteps, (latents.shape[0],), device=latents.device).long()
