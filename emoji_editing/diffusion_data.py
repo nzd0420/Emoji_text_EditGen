@@ -57,11 +57,15 @@ class EmojiDiffusionEditDataset(Dataset[DiffusionExample]):
         resolution: int = 256,
         prompt_config: PromptBuildConfig | None = None,
         max_samples: int | None = None,
+        subset_seed: int = 0,
         background_rgb: tuple[int, int, int] = WHITE_BACKGROUND,
         interpolation: int = Image.LANCZOS,
     ) -> None:
         rows = [row for row in read_csv_rows(pair_csv_path) if row["split"] == split]
-        if max_samples is not None:
+        if max_samples is not None and max_samples < len(rows):
+            # CSV 先排 style_transfer（仅几千条）再排 semantic_edit，顺序截断会丢掉后面的
+            # 任务类型，因此先用固定种子打乱再截断，得到 task_type 比例接近总体、可复现的子集。
+            random.Random(subset_seed).shuffle(rows)
             rows = rows[:max_samples]
         self.rows = rows
         self.split = split
