@@ -116,7 +116,7 @@ TRAIN_CONFIG = DiffusionTrainConfig(
     enable_xformers_memory_efficient_attention=False,  # 安装 xformers 后可改成 True。
     allow_tf32=True,  # NVIDIA Ampere/Ada/Hopper 推荐开启。
     use_8bit_adam=False,  # 安装 bitsandbytes 后可改成 True。
-    checkpointing_steps=2000,  # 短训练总步数少，调大以基本不中途存盘。
+    checkpointing_steps=100,  # 短训练总步数少，调大以基本不中途存盘。
     checkpoints_total_limit=3,  # 最多保留多少个历史 checkpoint。
     resume_from_checkpoint=None,  # 从某个 checkpoint 目录恢复训练。
     validation_steps=150,  # 短训练里多看几次验证渲染。
@@ -306,20 +306,28 @@ def run_validation(
     generator = torch.Generator(device=accelerator.device).manual_seed(config.validation_seed)
     rendered_images: list[Image.Image] = []
     captions: list[str] = []
-    for sample in samples:
-        source_image = ((sample.source_pixel_values.clamp(-1, 1) + 1.0) * 127.5).byte()
-        source_pil = Image.fromarray(source_image.permute(1, 2, 0).cpu().numpy())
-        result = pipeline(
-            prompt=sample.prompt,
-            image=source_pil,
-            negative_prompt=DEFAULT_NEGATIVE_PROMPT,
-            num_inference_steps=config.validation_inference_steps,
-            guidance_scale=config.validation_guidance_scale,
-            image_guidance_scale=config.validation_image_guidance_scale,
-            generator=generator,
-        ).images[0]
-        rendered_images.append(result)
-        captions.append(f"{sample.source_name} -> {sample.target_name}")
+    # 训练中 VAE 被转成 weight_dtype（bf16），而 unet/text_encoder 在 autocast 混合精度下仍是
+    # fp32；推理 pipeline 不会自动统一这些 dtype，会触发 "Input type (float) and bias type
+    # (BFloat16)" 报错。用 autocast 包裹推理即可统一计算 dtype（fp32 精度时自动失效）。
+    with torch.autocast(
+        device_type=accelerator.device.type,
+        dtype=weight_dtype,
+        enabled=weight_dtype != torch.float32,
+    ):
+        for sample in samples:
+            source_image = ((sample.source_pixel_values.clamp(-1, 1) + 1.0) * 127.5).byte()
+            source_pil = Image.fromarray(source_image.permute(1, 2, 0).cpu().numpy())
+            result = pipeline(
+                prompt=sample.prompt,
+                image=source_pil,
+                negative_prompt=DEFAULT_NEGATIVE_PROMPT,
+                num_inference_steps=config.validation_inference_steps,
+                guidance_scale=config.validation_guidance_scale,
+                image_guidance_scale=config.validation_image_guidance_scale,
+                generator=generator,
+            ).images[0]
+            rendered_images.append(result)
+            captions.append(f"{sample.source_name} -> {sample.target_name}")
 
     validation_dir = config.output_dir / "validation"
     validation_dir.mkdir(parents=True, exist_ok=True)
