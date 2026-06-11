@@ -43,11 +43,19 @@ UI_CONFIG = UIConfig(
 
 
 EXAMPLE_PROMPTS = [
+    "Generate a cheerful yellow emoji with starry eyes.",
     "Make this emoji look happier while preserving the original platform style.",
     "Change this emoji into a crying version with visible tears.",
     "Render the same expression in a cleaner Google-style emoji design.",
     "Add sunglasses and make the face feel more confident.",
 ]
+
+SOURCE_MODE_TEXT_ONLY = "Text-only generation"
+SOURCE_MODE_BUILT_IN = "Built-in emoji"
+SOURCE_MODE_UPLOAD = "Upload"
+
+NEUTRAL_SOURCE_VENDOR = "Apple"
+NEUTRAL_SOURCE_NAME = "neutral face"
 
 
 def build_theme() -> gr.themes.Base:
@@ -308,6 +316,11 @@ footer {
   gap: 18px;
 }
 
+.generated-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .image-card {
   border: 1px solid rgba(24, 24, 23, 0.10);
   border-radius: 10px;
@@ -460,6 +473,17 @@ def build_interface(config: UIConfig) -> gr.Blocks:
     default_key = default_choices[0][1]
     default_entry = lookup[default_key]
 
+    def find_neutral_entry() -> EmojiCatalogEntry:
+        for entry in entries:
+            if entry.vendor == NEUTRAL_SOURCE_VENDOR and entry.name == NEUTRAL_SOURCE_NAME:
+                return entry
+        for entry in entries:
+            if entry.name == NEUTRAL_SOURCE_NAME:
+                return entry
+        return default_entry
+
+    neutral_entry = find_neutral_entry()
+
     def load_preview(path: str) -> Image.Image:
         with Image.open(path) as image:
             return image.convert("RGBA").copy()
@@ -475,6 +499,7 @@ def build_interface(config: UIConfig) -> gr.Blocks:
         edited_image: Image.Image | None = None,
         source_caption: str = "Ready",
         edited_caption: str = "Waiting",
+        show_source: bool = True,
     ) -> str:
         source_body = (
             f'<img src="{image_to_data_uri(source_image)}" alt="Source emoji">'
@@ -486,6 +511,29 @@ def build_interface(config: UIConfig) -> gr.Blocks:
             if edited_image is not None
             else '<div class="empty-result">Edited result</div>'
         )
+        if not show_source:
+            generated_body = (
+                f'<img src="{image_to_data_uri(edited_image)}" alt="Generated emoji">'
+                if edited_image is not None
+                else '<div class="empty-result">Generated result</div>'
+            )
+            return f"""
+            <div class="output-stage">
+              <div class="output-header">
+                <h2>Output</h2>
+                <span>Text / Result</span>
+              </div>
+              <div class="generated-grid">
+                <div class="image-card">
+                  <div class="image-card-header">
+                    <span class="image-card-title">Generated</span>
+                    <span class="image-card-kicker">{escape(edited_caption)}</span>
+                  </div>
+                  <div class="image-canvas">{generated_body}</div>
+                </div>
+              </div>
+            </div>
+            """
         return f"""
         <div class="output-stage">
           <div class="output-header">
@@ -531,17 +579,27 @@ def build_interface(config: UIConfig) -> gr.Blocks:
         return selected_label(entry), render_stage_html(preview, source_caption=entry.vendor)
 
     def toggle_source_mode(source_mode: str, selected_key: str, uploaded_image: Image.Image | None):
-        built_in = source_mode == "Built-in emoji"
+        built_in = source_mode == SOURCE_MODE_BUILT_IN
+        upload = source_mode == SOURCE_MODE_UPLOAD
         if built_in:
             entry = lookup[selected_key]
             source_image = load_preview(entry.image_path)
             stage_html = render_stage_html(source_image, source_caption=entry.vendor)
-        else:
+            selection = gr.update(value=selected_label(entry), visible=True)
+        elif upload:
             stage_html = render_stage_html(uploaded_image, source_caption="Upload")
+            selection = gr.update(
+                value="Uploaded source image" if uploaded_image is not None else "Upload a source emoji image.",
+                visible=True,
+            )
+        else:
+            stage_html = render_stage_html(None, show_source=False)
+            selection = gr.update(value="", visible=False)
         return (
             gr.update(visible=built_in),
             gr.update(visible=built_in),
-            gr.update(visible=not built_in),
+            gr.update(visible=upload),
+            selection,
             stage_html,
         )
 
@@ -571,10 +629,18 @@ def build_interface(config: UIConfig) -> gr.Blocks:
 
         source_name = None
         source_vendor = None
-        if source_mode == "Upload":
+        source_caption = "Input"
+        show_source = True
+        if source_mode == SOURCE_MODE_UPLOAD:
             if uploaded_image is None:
                 raise gr.Error("Please upload an emoji image first.")
             source_image = uploaded_image.convert("RGBA")
+        elif source_mode == SOURCE_MODE_TEXT_ONLY:
+            entry = neutral_entry
+            source_image = load_preview(entry.image_path)
+            source_name = entry.name
+            source_vendor = entry.vendor
+            show_source = False
         else:
             entry = lookup[selected_key]
             source_image = load_preview(entry.image_path)
@@ -600,17 +666,23 @@ def build_interface(config: UIConfig) -> gr.Blocks:
             extra_style_hint=extra_style_hint or None,
         )
         _ = json.dumps(metadata, ensure_ascii=False, indent=2)
-        return render_stage_html(source_image, result, source_caption="Input", edited_caption=f"seed {metadata['seed']}")
+        return render_stage_html(
+            source_image,
+            result,
+            source_caption=source_caption,
+            edited_caption=f"seed {metadata['seed']}",
+            show_source=show_source,
+        )
 
-    with gr.Blocks(title="Emoji Diffusion Editor", fill_width=True) as demo:
+    with gr.Blocks(title="TEGe", fill_width=True) as demo:
         gr.HTML(
             """
             <div class="topbar">
               <div class="brand-lockup">
                 <div class="brand-mark">🙂</div>
                 <div class="brand-copy">
-                  <h1>Emoji Diffusion Editor</h1>
-                  <p>Natural-language emoji editing studio</p>
+                  <h1>TEGe</h1>
+                  <p>Text Editing or Generating emojis</p>
                 </div>
               </div>
               <div class="run-spec">
@@ -624,26 +696,26 @@ def build_interface(config: UIConfig) -> gr.Blocks:
 
         with gr.Row(equal_height=False, elem_classes=["workspace"]):
             with gr.Column(scale=5, min_width=420, elem_classes=["control-panel"]):
-                gr.HTML('<div class="section-title"><span>Source</span><span class="index">01</span></div>')
+                gr.HTML('<div class="section-title"><span>Input</span><span class="index">01</span></div>')
                 source_mode = gr.Radio(
-                    choices=["Built-in emoji", "Upload"],
-                    value="Built-in emoji",
+                    choices=[SOURCE_MODE_TEXT_ONLY, SOURCE_MODE_BUILT_IN, SOURCE_MODE_UPLOAD],
+                    value=SOURCE_MODE_TEXT_ONLY,
                     label="Mode",
                 )
                 with gr.Row():
-                    vendor_dropdown = gr.Dropdown(choices=vendors, value=default_vendor, label="Vendor", visible=True)
-                    emoji_dropdown = gr.Dropdown(choices=default_choices, value=default_key, label="Emoji", visible=True)
+                    vendor_dropdown = gr.Dropdown(choices=vendors, value=default_vendor, label="Vendor", visible=False)
+                    emoji_dropdown = gr.Dropdown(choices=default_choices, value=default_key, label="Emoji", visible=False)
                 upload_image = gr.Image(label="Upload", type="pil", image_mode="RGBA", visible=False, height=150)
-                selection_text = gr.Markdown(selected_label(default_entry), elem_classes=["selected-meta"])
+                selection_text = gr.Markdown("", visible=False, elem_classes=["selected-meta"])
 
                 gr.HTML('<div class="divider"></div>')
                 gr.HTML('<div class="section-title"><span>Instruction</span><span class="index">02</span></div>')
                 instruction_box = gr.Textbox(
                     label="Prompt",
                     lines=3,
-                    placeholder="Example: Make this emoji look sadder while preserving Apple-style shading.",
+                    placeholder="Example: Generate a sleepy emoji with soft blue tears.",
                 )
-                run_button = gr.Button("Generate Edit", variant="primary", elem_id="run-edit-btn")
+                run_button = gr.Button("Generate Emoji", variant="primary", elem_id="run-edit-btn")
                 example_picker = gr.Dropdown(
                     choices=EXAMPLE_PROMPTS,
                     value=None,
@@ -672,13 +744,13 @@ def build_interface(config: UIConfig) -> gr.Blocks:
                         )
 
             with gr.Column(scale=9, min_width=760, elem_classes=["stage-panel"]):
-                stage_view = gr.HTML(render_stage_html(load_preview(default_entry.image_path), source_caption=default_entry.vendor))
+                stage_view = gr.HTML(render_stage_html(None, show_source=False))
 
         example_picker.change(fn=lambda choice: choice or "", inputs=[example_picker], outputs=[instruction_box])
         source_mode.change(
             fn=toggle_source_mode,
             inputs=[source_mode, emoji_dropdown, upload_image],
-            outputs=[vendor_dropdown, emoji_dropdown, upload_image, stage_view],
+            outputs=[vendor_dropdown, emoji_dropdown, upload_image, selection_text, stage_view],
         )
         vendor_dropdown.change(
             fn=update_emoji_choices,
