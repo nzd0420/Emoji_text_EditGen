@@ -11,6 +11,7 @@ import torch
 from PIL import Image
 
 from .catalog import EmojiCatalogEntry, catalog_lookup, entries_for_vendor, load_vendor_catalog, vendors_from_catalog
+from .image_utils import WHITE_BACKGROUND, prepare_emoji_image
 from .prompting import DEFAULT_NEGATIVE_PROMPT, PromptBuildConfig, build_inference_prompt
 
 
@@ -28,23 +29,21 @@ def _resolve_device(device: str | None) -> str:
     return "cuda" if torch.cuda.is_available() else "cpu"
 
 
-def _pad_to_square(image: Image.Image, background_rgb: tuple[int, int, int]) -> Image.Image:
-    width, height = image.size
-    side = max(width, height)
-    canvas = Image.new("RGBA", (side, side), background_rgb + (255,))
-    x = (side - width) // 2
-    y = (side - height) // 2
-    canvas.alpha_composite(image.convert("RGBA"), dest=(x, y))
-    return canvas
-
-
 def prepare_input_image(
     image: Image.Image,
     resolution: int,
-    background_rgb: tuple[int, int, int] = (255, 255, 255),
+    background_rgb: tuple[int, int, int] = WHITE_BACKGROUND,
+    trim_foreground: bool = True,
+    trim_margin_ratio: float = 0.08,
 ) -> Image.Image:
-    squared = _pad_to_square(image, background_rgb=background_rgb)
-    return squared.resize((resolution, resolution), resample=Image.LANCZOS).convert("RGB")
+    return prepare_emoji_image(
+        image,
+        resolution=resolution,
+        background_rgb=background_rgb,
+        trim_foreground=trim_foreground,
+        trim_margin_ratio=trim_margin_ratio,
+        interpolation=Image.LANCZOS,
+    )
 
 
 @lru_cache(maxsize=2)
@@ -105,6 +104,8 @@ def edit_emoji_image(
     negative_prompt: str = DEFAULT_NEGATIVE_PROMPT,
     seed: int = -1,
     resolution: int = 256,
+    trim_foreground: bool = True,
+    trim_margin_ratio: float = 0.08,
     scheduler_name: str = "euler_a",
     extra_style_hint: str | None = None,
 ) -> tuple[Image.Image, dict[str, Any]]:
@@ -115,7 +116,12 @@ def edit_emoji_image(
         device=device,
         scheduler_name=scheduler_name,
     )
-    prepared = prepare_input_image(source_image, resolution=resolution)
+    prepared = prepare_input_image(
+        source_image,
+        resolution=resolution,
+        trim_foreground=trim_foreground,
+        trim_margin_ratio=trim_margin_ratio,
+    )
     prompt = build_inference_prompt(
         instruction=instruction,
         source_name=source_name,
@@ -148,6 +154,8 @@ def edit_emoji_image(
         "guidance_scale": guidance_scale,
         "image_guidance_scale": image_guidance_scale,
         "resolution": resolution,
+        "trim_foreground": trim_foreground,
+        "trim_margin_ratio": trim_margin_ratio,
         "source_name": source_name,
         "source_vendor": source_vendor,
     }

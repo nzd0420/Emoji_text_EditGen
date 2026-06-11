@@ -14,6 +14,7 @@ from PIL import Image
 from torch import Tensor
 from torch.utils.data import Dataset
 
+from .image_utils import WHITE_BACKGROUND, prepare_emoji_image
 from .prompting import PromptBuildConfig, build_training_prompt
 
 
@@ -23,29 +24,26 @@ def _read_rows(csv_path: str | Path) -> list[dict[str, str]]:
         return list(csv.DictReader(handle))
 
 
-def _pad_to_square(image: Image.Image, background_rgb: tuple[int, int, int]) -> Image.Image:
-    width, height = image.size
-    side = max(width, height)
-    canvas = Image.new("RGBA", (side, side), background_rgb + (255,))
-    x = (side - width) // 2
-    y = (side - height) // 2
-    canvas.alpha_composite(image, dest=(x, y))
-    return canvas
-
-
 def load_editor_image(
     image_path: str | Path,
     resolution: int,
-    background_rgb: tuple[int, int, int] = (255, 255, 255),
+    background_rgb: tuple[int, int, int] = WHITE_BACKGROUND,
     interpolation: int = Image.LANCZOS,
+    trim_foreground: bool = True,
+    trim_margin_ratio: float = 0.08,
 ) -> Tensor:
     path = Path(image_path)
     with Image.open(path) as image:
-        rgba = image.convert("RGBA")
-        squared = _pad_to_square(rgba, background_rgb=background_rgb)
-        resized = squared.resize((resolution, resolution), resample=interpolation).convert("RGB")
+        prepared = prepare_emoji_image(
+            image,
+            resolution=resolution,
+            background_rgb=background_rgb,
+            trim_foreground=trim_foreground,
+            trim_margin_ratio=trim_margin_ratio,
+            interpolation=interpolation,
+        )
 
-    array = np.asarray(resized, dtype=np.float32) / 127.5 - 1.0
+    array = np.asarray(prepared, dtype=np.float32) / 127.5 - 1.0
     return torch.from_numpy(array).permute(2, 0, 1).contiguous()
 
 
@@ -73,8 +71,10 @@ class EmojiDiffusionEditDataset(Dataset[DiffusionExample]):
         resolution: int = 256,
         prompt_config: PromptBuildConfig | None = None,
         max_samples: int | None = None,
-        background_rgb: tuple[int, int, int] = (255, 255, 255),
+        background_rgb: tuple[int, int, int] = WHITE_BACKGROUND,
         interpolation: int = Image.LANCZOS,
+        trim_foreground: bool = True,
+        trim_margin_ratio: float = 0.08,
     ) -> None:
         rows = [row for row in _read_rows(pair_csv_path) if row["split"] == split]
         if max_samples is not None:
@@ -85,6 +85,8 @@ class EmojiDiffusionEditDataset(Dataset[DiffusionExample]):
         self.prompt_config = prompt_config or PromptBuildConfig()
         self.background_rgb = background_rgb
         self.interpolation = interpolation
+        self.trim_foreground = trim_foreground
+        self.trim_margin_ratio = trim_margin_ratio
 
     def __len__(self) -> int:
         return len(self.rows)
@@ -98,12 +100,16 @@ class EmojiDiffusionEditDataset(Dataset[DiffusionExample]):
             resolution=self.resolution,
             background_rgb=self.background_rgb,
             interpolation=self.interpolation,
+            trim_foreground=self.trim_foreground,
+            trim_margin_ratio=self.trim_margin_ratio,
         )
         target_pixel_values = load_editor_image(
             row["target_image_path"],
             resolution=self.resolution,
             background_rgb=self.background_rgb,
             interpolation=self.interpolation,
+            trim_foreground=self.trim_foreground,
+            trim_margin_ratio=self.trim_margin_ratio,
         )
         return DiffusionExample(
             prompt=prompt,

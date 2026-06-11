@@ -39,6 +39,8 @@ class DiffusionTrainConfig:
     pair_csv: Path
     output_dir: Path
     resolution: int
+    trim_foreground: bool
+    trim_margin_ratio: float
     train_batch_size: int
     eval_batch_size: int
     dataloader_num_workers: int
@@ -87,6 +89,8 @@ TRAIN_CONFIG = DiffusionTrainConfig(
     pair_csv=Path("data/interim/emoji_editing/metadata/all_edit_pairs.csv"),  # 训练样本表路径。
     output_dir=Path("artifacts/emoji_diffusion_editor"),  # LoRA、日志和验证图输出目录。
     resolution=256,  # 训练分辨率。
+    trim_foreground=True,  # Crop transparent/solid-color borders before resizing.
+    trim_margin_ratio=0.08,  # Extra margin kept around the detected emoji foreground.
     train_batch_size=32,  # 单卡训练 batch size。
     eval_batch_size=8,  # 预留给后续扩展验证批处理。
     dataloader_num_workers=0,  # 首次排查卡住建议先设为 0；稳定后再逐步加大。
@@ -411,6 +415,8 @@ def main() -> int:
         resolution=config.resolution,
         prompt_config=prompt_config,
         max_samples=config.max_train_samples,
+        trim_foreground=config.trim_foreground,
+        trim_margin_ratio=config.trim_margin_ratio,
     )
     validation_dataset = EmojiDiffusionEditDataset(
         pair_csv_path=config.pair_csv,
@@ -418,6 +424,8 @@ def main() -> int:
         resolution=config.resolution,
         prompt_config=prompt_config,
         max_samples=config.max_val_samples,
+        trim_foreground=config.trim_foreground,
+        trim_margin_ratio=config.trim_margin_ratio,
     )
     rank0_print(
         accelerator,
