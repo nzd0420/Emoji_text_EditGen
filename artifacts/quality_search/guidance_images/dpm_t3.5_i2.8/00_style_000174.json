@@ -1,0 +1,11 @@
+{
+  "prompt": "Instruction: Keep the same emoji, but render it in SoftBank style. emoji icon edit. clean centered emoji icon, simple plain background, crisp platform-style shading, no text. Preserve the source emoji identity, same face shape, centered composition, original color palette, and platform style unless explicitly changed. Source emoji: grinning face with smiling eyes. Source style: Apple. Keep this platform style unless the instruction asks for another style.",
+  "negative_prompt": "photorealistic, realistic face, human skin, body, hands, extra limbs, text, letters, logo, watermark, sticker border, frame, cropped face, duplicate face, distorted eyes, asymmetrical eyes, deformed emoji, blurry, noisy, low detail, jpeg artifacts, background clutter",
+  "seed": 1234,
+  "steps": 40,
+  "guidance_scale": 3.5,
+  "image_guidance_scale": 2.8,
+  "resolution": 256,
+  "source_name": "grinning face with smiling eyes",
+  "source_vendor": "Apple"
+}

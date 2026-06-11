@@ -1,0 +1,82 @@
+{
+  "config": {
+    "split": "test",
+    "num_samples_requested": 160,
+    "num_samples_used": 160,
+    "steps": 30,
+    "guidance_scale": 5.0,
+    "image_guidance_scale": 1.8,
+    "seed": 1234,
+    "task_type_counts": {
+      "semantic_edit": 80,
+      "style_transfer": 80
+    }
+  },
+  "methods": [
+    "copy",
+    "zeroshot",
+    "lora"
+  ],
+  "metrics": {
+    "copy": {
+      "clip_text_alignment": {
+        "semantic_edit": 0.28509647902101276,
+        "overall": 0.2802009930834174,
+        "style_transfer": 0.275305507145822
+      },
+      "clip_image_to_target": {
+        "semantic_edit": 0.9399518825113773,
+        "overall": 0.9254275258630514,
+        "style_transfer": 0.9109031692147255
+      },
+      "clip_image_to_source": {
+        "semantic_edit": 1.0000000149011612,
+        "overall": 1.0000000078231097,
+        "style_transfer": 1.000000000745058
+      },
+      "lpips_to_target": {
+        "overall": NaN
+      }
+    },
+    "zeroshot": {
+      "clip_text_alignment": {
+        "semantic_edit": 0.2905474707484245,
+        "overall": 0.28477906277403237,
+        "style_transfer": 0.27901065479964016
+      },
+      "clip_image_to_target": {
+        "semantic_edit": 0.9069581791758538,
+        "overall": 0.88768799751997,
+        "style_transfer": 0.8684178158640862
+      },
+      "clip_image_to_source": {
+        "semantic_edit": 0.947511862963438,
+        "overall": 0.9340128485113383,
+        "style_transfer": 0.9205138340592385
+      },
+      "lpips_to_target": {
+        "overall": NaN
+      }
+    },
+    "lora": {
+      "clip_text_alignment": {
+        "semantic_edit": 0.29894892666488887,
+        "overall": 0.28522513769567015,
+        "style_transfer": 0.2715013487264514
+      },
+      "clip_image_to_target": {
+        "semantic_edit": 0.9566655248403549,
+        "overall": 0.9274999290704727,
+        "style_transfer": 0.8983343333005905
+      },
+      "clip_image_to_source": {
+        "semantic_edit": 0.9151147030293941,
+        "overall": 0.900123019143939,
+        "style_transfer": 0.8851313352584839
+      },
+      "lpips_to_target": {
+        "overall": NaN
+      }
+    }
+  }
+}

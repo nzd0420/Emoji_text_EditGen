@@ -1,0 +1,11 @@
+{
+  "prompt": "Instruction: Restyle this star-struck as a Samsung emoji. emoji icon edit. clean centered emoji icon, simple plain background, crisp platform-style shading, no text. Preserve the source emoji identity, same face shape, centered composition, original color palette, and platform style unless explicitly changed. Source emoji: star-struck. Source style: Facebook. Keep this platform style unless the instruction asks for another style.",
+  "negative_prompt": "photorealistic, realistic face, human skin, body, hands, extra limbs, text, letters, logo, watermark, sticker border, frame, cropped face, duplicate face, distorted eyes, asymmetrical eyes, deformed emoji, blurry, noisy, low detail, jpeg artifacts, background clutter",
+  "seed": 1237,
+  "steps": 35,
+  "guidance_scale": 4.5,
+  "image_guidance_scale": 2.2,
+  "resolution": 256,
+  "source_name": "star-struck",
+  "source_vendor": "Facebook"
+}

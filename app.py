@@ -271,10 +271,7 @@ footer {
 .output-stage {
   padding: 18px;
   min-height: 506px;
-  background:
-    radial-gradient(circle at 20% 0%, rgba(15, 118, 110, 0.10), transparent 34%),
-    radial-gradient(circle at 100% 12%, rgba(199, 134, 46, 0.13), transparent 32%),
-    #fbfbf7;
+  background: #fbfbf7;
 }
 
 .output-header {
@@ -342,14 +339,7 @@ footer {
   display: grid;
   place-items: center;
   padding: 26px;
-  background:
-    linear-gradient(45deg, rgba(24,24,23,0.035) 25%, transparent 25%),
-    linear-gradient(-45deg, rgba(24,24,23,0.035) 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, rgba(24,24,23,0.035) 75%),
-    linear-gradient(-45deg, transparent 75%, rgba(24,24,23,0.035) 75%),
-    #f7f7f3;
-  background-size: 22px 22px;
-  background-position: 0 0, 0 11px, 11px -11px, -11px 0;
+  background: #ffffff;
 }
 
 .image-canvas img {

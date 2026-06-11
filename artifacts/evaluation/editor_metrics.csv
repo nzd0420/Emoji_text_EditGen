@@ -1,0 +1,10 @@
+method,scope,clip_text_alignment,clip_image_to_target,clip_image_to_source,lpips_to_target
+copy,overall,0.280201,0.925428,1.000000,nan
+copy,semantic_edit,0.285096,0.939952,1.000000,nan
+copy,style_transfer,0.275306,0.910903,1.000000,nan
+zeroshot,overall,0.284779,0.887688,0.934013,nan
+zeroshot,semantic_edit,0.290547,0.906958,0.947512,nan
+zeroshot,style_transfer,0.279011,0.868418,0.920514,nan
+lora,overall,0.285225,0.927500,0.900123,nan
+lora,semantic_edit,0.298949,0.956666,0.915115,nan
+lora,style_transfer,0.271501,0.898334,0.885131,nan

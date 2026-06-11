@@ -1,0 +1,11 @@
+{
+  "prompt": "Instruction: Restyle this sleepy face as a KDDI emoji. emoji icon edit. clean centered emoji icon, simple plain background, crisp platform-style shading, no text. Preserve the source emoji identity, same face shape, centered composition, original color palette, and platform style unless explicitly changed. Source emoji: sleepy face. Source style: JoyPixels. Keep this platform style unless the instruction asks for another style.",
+  "negative_prompt": "photorealistic, realistic face, human skin, body, hands, extra limbs, text, letters, logo, watermark, sticker border, frame, cropped face, duplicate face, distorted eyes, asymmetrical eyes, deformed emoji, blurry, noisy, low detail, jpeg artifacts, background clutter",
+  "seed": 1236,
+  "steps": 40,
+  "guidance_scale": 4.5,
+  "image_guidance_scale": 1.6,
+  "resolution": 256,
+  "source_name": "sleepy face",
+  "source_vendor": "JoyPixels"
+}

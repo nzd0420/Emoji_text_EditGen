@@ -3,3 +3,5 @@ data/interim/
 data/processed/
 __pycache__/
 .DS_Store
+artifacts/emoji_diffusion_editor_60k/checkpoints/*/model.safetensors
+artifacts/emoji_diffusion_editor_60k/checkpoints/*/model_1.safetensors
