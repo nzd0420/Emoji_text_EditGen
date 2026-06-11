@@ -36,6 +36,15 @@ def _load_clip(model_name: str, device: str):
     return model, processor
 
 
+def _pooler_output(outputs: object) -> torch.Tensor:
+    pooled = getattr(outputs, "pooler_output", None)
+    if isinstance(pooled, torch.Tensor):
+        return pooled
+    if isinstance(outputs, (tuple, list)) and len(outputs) > 1 and isinstance(outputs[1], torch.Tensor):
+        return outputs[1]
+    raise TypeError(f"CLIP backbone returned unsupported output type: {type(outputs)!r}")
+
+
 @torch.no_grad()
 def _clip_image_features(
     images: Sequence[Image.Image],
@@ -48,7 +57,8 @@ def _clip_image_features(
     for start in range(0, len(images), batch_size):
         batch = [img.convert("RGB") for img in images[start : start + batch_size]]
         inputs = processor(images=batch, return_tensors="pt").to(device)
-        feats = model.get_image_features(**inputs)
+        vision_outputs = model.vision_model(pixel_values=inputs["pixel_values"], return_dict=True)
+        feats = model.visual_projection(_pooler_output(vision_outputs))
         chunks.append(torch.nn.functional.normalize(feats, dim=-1))
     return torch.cat(chunks, dim=0)
 
@@ -71,7 +81,12 @@ def _clip_text_features(
             truncation=True,
             max_length=77,
         ).to(device)
-        feats = model.get_text_features(**inputs)
+        text_outputs = model.text_model(
+            input_ids=inputs["input_ids"],
+            attention_mask=inputs.get("attention_mask"),
+            return_dict=True,
+        )
+        feats = model.text_projection(_pooler_output(text_outputs))
         chunks.append(torch.nn.functional.normalize(feats, dim=-1))
     return torch.cat(chunks, dim=0)
 

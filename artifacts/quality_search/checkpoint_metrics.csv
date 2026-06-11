@@ -1,0 +1,7 @@
+label,lora_path,steps,guidance_scale,image_guidance_scale,scheduler,clip_text_alignment,clip_image_to_target,clip_image_to_source,score
+checkpoint-60000,artifacts/emoji_diffusion_editor_60k/checkpoints/checkpoint-60000/lora,35,4.5,2.2,dpm,0.29554612437884015,0.9456202487150828,0.8700788418451945,1.2230771606167157
+lora_final,artifacts/emoji_diffusion_editor_60k/lora_final,35,4.5,2.2,dpm,0.29554612437884015,0.9456202487150828,0.8700788418451945,1.2230771606167157
+checkpoint-52000,artifacts/emoji_diffusion_editor_60k/checkpoints/checkpoint-52000/lora,35,4.5,2.2,dpm,0.29439835250377655,0.946078876654307,0.8694427410761515,1.2230068482458591
+checkpoint-54000,artifacts/emoji_diffusion_editor_60k/checkpoints/checkpoint-54000/lora,35,4.5,2.2,dpm,0.2942568411429723,0.9458034634590149,0.8704308966795603,1.2228795371949672
+checkpoint-56000,artifacts/emoji_diffusion_editor_60k/checkpoints/checkpoint-56000/lora,35,4.5,2.2,dpm,0.29543157418568927,0.9453274806340536,0.8706952631473541,1.2228675842285157
+checkpoint-58000,artifacts/emoji_diffusion_editor_60k/checkpoints/checkpoint-58000/lora,35,4.5,2.2,dpm,0.2957576960325241,0.9454232156276703,0.8692753116289774,1.2227934715648492

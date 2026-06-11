@@ -1,0 +1,15 @@
+{
+  "best_guidance": {
+    "label": "dpm_t3.5_i2.8",
+    "lora_path": "artifacts/emoji_diffusion_editor_60k/checkpoints/checkpoint-60000/lora",
+    "steps": 40,
+    "guidance_scale": 3.5,
+    "image_guidance_scale": 2.8,
+    "scheduler": "dpm",
+    "clip_text_alignment": 0.3042078763246536,
+    "clip_image_to_target": 0.9589197039604187,
+    "clip_image_to_source": 0.8970194657643636,
+    "score": 1.2447963538269202
+  },
+  "selection_note": "Best by CLIP target + text + source composite score. Inspect guidance_grid.png visually."
+}

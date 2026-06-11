@@ -61,12 +61,12 @@ class SweepConfig:
 SWEEP_CONFIG = SweepConfig(
     pair_csv=Path("data/interim/emoji_editing/metadata/all_edit_pairs.csv"),  # 样本表。
     base_model="timbrooks/instruct-pix2pix",  # 底座模型。
-    lora_path=Path("artifacts/emoji_diffusion_editor/lora_final"),  # 微调 LoRA；设 None 则扫 zeroshot。
+    lora_path=Path("artifacts/emoji_diffusion_editor_60k/lora_final"),  # 微调 LoRA；设 None 则扫 zeroshot。
     split="test",  # 评估划分。
     num_samples=80,  # 每个 guidance 值评估的样本数（分层均分）。
     resolution=256,  # 分辨率。
     precision="fp16",  # 推理精度。
-    device=None,  # None 自动选设备。
+    device="cuda:0",  # 强制使用第一张 GPU。
     steps=30,  # 推理步数。
     guidance_scale=5.0,  # 固定的文本 guidance。
     image_guidance_scales=(1.0, 1.5, 2.0, 2.5),  # 要扫描的图像 guidance 列表。

@@ -38,20 +38,20 @@ class InferenceConfig:
 # 在这里修改推理脚本配置。
 INFER_CONFIG = InferenceConfig(
     base_model="timbrooks/instruct-pix2pix",  # 推理底座模型。
-    lora_path=Path("artifacts/emoji_diffusion_editor/lora_final"),  # 训练完成后的 LoRA 目录。
+    lora_path=Path("artifacts/emoji_diffusion_editor_60k/lora_final"),  # 训练完成后的 LoRA 目录。
     input_image=None,  # 填本地图片路径时会优先使用该图片；保持 None 时走内置 emoji。
     vendor_index_csv=Path("data/interim/emoji_editing/metadata/vendor_image_index.csv"),  # 内置 emoji 索引表。
     vendor="Apple",  # 当 input_image 为 None 时，默认选择哪个平台风格。
     emoji_key=None,  # 指定某个内置 emoji 的 key；保持 None 时自动选该 vendor 的第一张。
     instruction="Add sunglasses and make the face more confident.",  # 自然语言编辑指令。
     precision="fp16",  # RTX 单卡推理通常先用 fp16。
-    device=None,  # 强制设备，例如 'cuda:0'；保持 None 时自动选择。
-    steps=30,  # 推理步数。
-    guidance_scale=4.5,  # 文本 guidance 强度。
-    image_guidance_scale=1.8,  # 源图像保持强度。
+    device="cuda:0",  # 强制使用第一张 GPU。
+    steps=40,  # 推理步数。
+    guidance_scale=3.5,  # 文本 guidance 强度。
+    image_guidance_scale=2.8,  # 源图像保持强度。
     seed=-1,  # -1 表示随机；填固定整数可复现。
     resolution=256,  # 推理分辨率。
-    scheduler="euler_a",  # 采样器，可选 'euler_a' 或 'dpm'。
+    scheduler="dpm",  # 采样器，可选 'euler_a' 或 'dpm'。
     extra_style_hint=None,  # 额外风格提示词，不需要时保持 None。
     output_image=Path("artifacts/emoji_editor_output.png"),  # 输出图片路径。
     output_metadata=Path("artifacts/emoji_editor_output.json"),  # 输出 metadata 路径。

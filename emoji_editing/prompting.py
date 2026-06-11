@@ -7,8 +7,18 @@ from dataclasses import dataclass
 
 
 DEFAULT_NEGATIVE_PROMPT = (
-    "photorealistic, realistic face, human skin, blurry, noisy, watermark, text, low detail, "
-    "jpeg artifacts, cropped, background clutter, deformed emoji"
+    "photorealistic, realistic face, human skin, body, hands, extra limbs, text, letters, logo, "
+    "watermark, sticker border, frame, cropped face, duplicate face, distorted eyes, asymmetrical eyes, "
+    "deformed emoji, blurry, noisy, low detail, jpeg artifacts, background clutter"
+)
+
+INFERENCE_STYLE_HINT = (
+    "clean centered emoji icon, simple plain background, crisp platform-style shading, no text"
+)
+
+INFERENCE_PRESERVATION_HINT = (
+    "Preserve the source emoji identity, same face shape, centered composition, original color palette, "
+    "and platform style unless explicitly changed"
 )
 
 
@@ -17,7 +27,7 @@ class PromptBuildConfig:
     """Controls how structured prompts are composed."""
 
     prefix: str = "emoji icon edit"
-    style_hint: str = "clean centered emoji icon, simple background, crisp shading"
+    style_hint: str = "clean centered emoji icon, simple plain background, crisp platform-style shading"
     structured_prompt_probability: float = 0.8
     include_attribute_delta_probability: float = 0.6
 
@@ -84,12 +94,13 @@ def build_inference_prompt(
     segments = [
         f"Instruction: {instruction.strip()}",
         f"{config.prefix}.",
-        config.style_hint + ".",
+        INFERENCE_STYLE_HINT + ".",
+        INFERENCE_PRESERVATION_HINT + ".",
     ]
     if source_name:
         segments.append(f"Source emoji: {source_name}.")
     if source_vendor:
-        segments.append(f"Keep the overall {source_vendor} emoji styling unless the instruction changes it.")
+        segments.append(f"Source style: {source_vendor}. Keep this platform style unless the instruction asks for another style.")
     if extra_style_hint:
         segments.append(extra_style_hint.strip().rstrip(".") + ".")
     return " ".join(segment for segment in segments if segment)

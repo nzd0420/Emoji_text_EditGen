@@ -1,0 +1,40 @@
+{
+  "pair_csv": "data/interim/emoji_editing/metadata/all_edit_pairs.csv",
+  "base_model": "timbrooks/instruct-pix2pix",
+  "candidate_lora_paths": [
+    "artifacts/emoji_diffusion_editor_60k/checkpoints/checkpoint-52000/lora",
+    "artifacts/emoji_diffusion_editor_60k/checkpoints/checkpoint-54000/lora",
+    "artifacts/emoji_diffusion_editor_60k/checkpoints/checkpoint-56000/lora",
+    "artifacts/emoji_diffusion_editor_60k/checkpoints/checkpoint-58000/lora",
+    "artifacts/emoji_diffusion_editor_60k/checkpoints/checkpoint-60000/lora",
+    "artifacts/emoji_diffusion_editor_60k/lora_final"
+  ],
+  "split": "test",
+  "num_samples": 6,
+  "subset_seed": 0,
+  "generation_seed": 1234,
+  "resolution": 256,
+  "precision": "fp16",
+  "device": "cuda:0",
+  "checkpoint_steps": 35,
+  "checkpoint_guidance_scale": 4.5,
+  "checkpoint_image_guidance_scale": 2.2,
+  "checkpoint_scheduler": "dpm",
+  "guidance_steps": 40,
+  "guidance_scales": [
+    3.5,
+    4.5,
+    5.5
+  ],
+  "image_guidance_scales": [
+    1.6,
+    2.2,
+    2.8
+  ],
+  "schedulers": [
+    "euler_a",
+    "dpm"
+  ],
+  "clip_model": "openai/clip-vit-base-patch32",
+  "output_dir": "artifacts/quality_search"
+}

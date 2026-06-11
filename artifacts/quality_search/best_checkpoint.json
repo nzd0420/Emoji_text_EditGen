@@ -1,0 +1,15 @@
+{
+  "best_checkpoint": {
+    "label": "checkpoint-60000",
+    "lora_path": "artifacts/emoji_diffusion_editor_60k/checkpoints/checkpoint-60000/lora",
+    "steps": 35,
+    "guidance_scale": 4.5,
+    "image_guidance_scale": 2.2,
+    "scheduler": "dpm",
+    "clip_text_alignment": 0.29554612437884015,
+    "clip_image_to_target": 0.9456202487150828,
+    "clip_image_to_source": 0.8700788418451945,
+    "score": 1.2230771606167157
+  },
+  "selection_note": "Best by CLIP target + text + source composite score. Inspect checkpoint_comparison.png visually."
+}
