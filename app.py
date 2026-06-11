@@ -29,21 +29,21 @@ class UIConfig:
     share: bool
 
 
-# 在这里修改可视化界面配置。
+# Edit the visual interface configuration here.
 UI_CONFIG = UIConfig(
-    base_model="timbrooks/instruct-pix2pix",  # 推理底座模型。
-    lora_path=Path("artifacts/emoji_diffusion_editor_60k/lora_final"),  # 训练完成后的 LoRA 目录。
-    vendor_index_csv=Path("data/interim/emoji_editing/metadata/vendor_image_index.csv"),  # 内置 emoji 索引表。
-    precision="fp16",  # RTX 单卡界面推理通常先用 fp16。
-    device="cuda:0",  # 强制使用第一张 GPU。
-    host="127.0.0.1",  # Gradio 监听地址。
-    port=7860,  # Gradio 端口。
-    share=False,  # 是否生成公网分享链接。
+    base_model="timbrooks/instruct-pix2pix",  # Base model for inference.
+    lora_path=Path("artifacts/emoji_diffusion_editor_60k/lora_final"),  # Final trained LoRA directory.
+    vendor_index_csv=Path("data/interim/emoji_editing/metadata/vendor_image_index.csv"),  # Built-in emoji index.
+    precision="fp16",  # Use fp16 for local RTX inference.
+    device="cuda:0",  # Force the first GPU.
+    host="127.0.0.1",  # Gradio host.
+    port=7860,  # Gradio port.
+    share=False,  # Whether to create a public Gradio link.
 )
 
 
 EXAMPLE_PROMPTS = [
-    "把这个 emoji 变得更开心一点，并保留整体平台风格。",
+    "Make this emoji look happier while preserving the original platform style.",
     "Change this emoji into a crying version with visible tears.",
     "Render the same expression in a cleaner Google-style emoji design.",
     "Add sunglasses and make the face feel more confident.",
@@ -132,16 +132,19 @@ CUSTOM_CSS = """
 }
 
 .gradio-container {
-  max-width: 1320px !important;
+  width: calc(100vw - 24px) !important;
+  max-width: 1960px !important;
   margin: 0 auto !important;
-  padding: 18px 24px 24px !important;
+  padding: 14px 12px 20px !important;
   color: var(--ink) !important;
   background: var(--page) !important;
   font-family: "Inter", ui-sans-serif, system-ui, sans-serif !important;
 }
 
 .gradio-container .contain {
-  gap: 14px !important;
+  width: 100% !important;
+  max-width: none !important;
+  gap: 16px !important;
 }
 
 footer {
@@ -212,8 +215,9 @@ footer {
 }
 
 .workspace {
+  width: 100% !important;
   align-items: flex-start !important;
-  gap: 16px !important;
+  gap: 18px !important;
 }
 
 .control-panel,
@@ -225,7 +229,7 @@ footer {
 }
 
 .control-panel {
-  padding: 18px !important;
+  padding: 20px !important;
 }
 
 .stage-panel {
@@ -269,8 +273,8 @@ footer {
 }
 
 .output-stage {
-  padding: 18px;
-  min-height: 506px;
+  padding: 20px;
+  min-height: 560px;
   background: #fbfbf7;
 }
 
@@ -335,22 +339,22 @@ footer {
 }
 
 .image-canvas {
-  min-height: 332px;
+  min-height: 390px;
   display: grid;
   place-items: center;
-  padding: 26px;
+  padding: 30px;
   background: #ffffff;
 }
 
 .image-canvas img {
-  width: min(100%, 244px);
-  height: min(244px, 52vh);
+  width: min(100%, 340px);
+  height: min(340px, 56vh);
   object-fit: contain;
   image-rendering: auto;
 }
 
 .empty-result {
-  width: min(100%, 244px);
+  width: min(100%, 320px);
   aspect-ratio: 1;
   display: grid;
   place-items: center;
@@ -486,7 +490,7 @@ def build_interface(config: UIConfig) -> gr.Blocks:
         <div class="output-stage">
           <div class="output-header">
             <h2>Output</h2>
-            <span>before / after</span>
+            <span>Before / After</span>
           </div>
           <div class="comparison-grid">
             <div class="image-card">
@@ -508,7 +512,7 @@ def build_interface(config: UIConfig) -> gr.Blocks:
         """
 
     def selected_label(entry: EmojiCatalogEntry) -> str:
-        return f"Selected: {entry.display_name} · {entry.vendor}"
+        return f"Selected: {entry.display_name} - {entry.vendor}"
 
     def update_emoji_choices(vendor: str):
         vendor_choices = choices_for_vendor(entries, vendor)
@@ -527,7 +531,7 @@ def build_interface(config: UIConfig) -> gr.Blocks:
         return selected_label(entry), render_stage_html(preview, source_caption=entry.vendor)
 
     def toggle_source_mode(source_mode: str, selected_key: str, uploaded_image: Image.Image | None):
-        built_in = source_mode == "Choose built-in emoji"
+        built_in = source_mode == "Built-in emoji"
         if built_in:
             entry = lookup[selected_key]
             source_image = load_preview(entry.image_path)
@@ -563,13 +567,13 @@ def build_interface(config: UIConfig) -> gr.Blocks:
         negative_prompt = negative_prompt or DEFAULT_NEGATIVE_PROMPT
 
         if not instruction:
-            raise gr.Error("请输入编辑要求。")
+            raise gr.Error("Please enter an edit prompt.")
 
         source_name = None
         source_vendor = None
         if source_mode == "Upload":
             if uploaded_image is None:
-                raise gr.Error("请先上传一个 emoji 图像。")
+                raise gr.Error("Please upload an emoji image first.")
             source_image = uploaded_image.convert("RGBA")
         else:
             entry = lookup[selected_key]
@@ -598,7 +602,7 @@ def build_interface(config: UIConfig) -> gr.Blocks:
         _ = json.dumps(metadata, ensure_ascii=False, indent=2)
         return render_stage_html(source_image, result, source_caption="Input", edited_caption=f"seed {metadata['seed']}")
 
-    with gr.Blocks(title="Emoji Diffusion Editor") as demo:
+    with gr.Blocks(title="Emoji Diffusion Editor", fill_width=True) as demo:
         gr.HTML(
             """
             <div class="topbar">
@@ -619,11 +623,11 @@ def build_interface(config: UIConfig) -> gr.Blocks:
         )
 
         with gr.Row(equal_height=False, elem_classes=["workspace"]):
-            with gr.Column(scale=4, min_width=340, elem_classes=["control-panel"]):
+            with gr.Column(scale=5, min_width=420, elem_classes=["control-panel"]):
                 gr.HTML('<div class="section-title"><span>Source</span><span class="index">01</span></div>')
                 source_mode = gr.Radio(
-                    choices=["Choose built-in emoji", "Upload"],
-                    value="Choose built-in emoji",
+                    choices=["Built-in emoji", "Upload"],
+                    value="Built-in emoji",
                     label="Mode",
                 )
                 with gr.Row():
@@ -637,7 +641,7 @@ def build_interface(config: UIConfig) -> gr.Blocks:
                 instruction_box = gr.Textbox(
                     label="Prompt",
                     lines=3,
-                    placeholder="例如：把这个 emoji 变得更伤心一点，并保留苹果风格的立体阴影。",
+                    placeholder="Example: Make this emoji look sadder while preserving Apple-style shading.",
                 )
                 run_button = gr.Button("Generate Edit", variant="primary", elem_id="run-edit-btn")
                 example_picker = gr.Dropdown(
@@ -667,7 +671,7 @@ def build_interface(config: UIConfig) -> gr.Blocks:
                             label="Scheduler",
                         )
 
-            with gr.Column(scale=7, min_width=520, elem_classes=["stage-panel"]):
+            with gr.Column(scale=9, min_width=760, elem_classes=["stage-panel"]):
                 stage_view = gr.HTML(render_stage_html(load_preview(default_entry.image_path), source_caption=default_entry.vendor))
 
         example_picker.change(fn=lambda choice: choice or "", inputs=[example_picker], outputs=[instruction_box])
