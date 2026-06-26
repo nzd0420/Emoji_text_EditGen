@@ -1,6 +1,6 @@
 # TEGe -- Text Editing or Generating emojis
 
-TEGe, short for **Text Editing or Generating emojis**, is a Track A application-based machine learning project for CS182. It builds a complete emoji editing/generation-style pipeline where a user provides either a source emoji plus an edit instruction, or only a text description, and the system generates an emoji image while trying to preserve clean emoji style and centered icon composition.
+TEGe, short for **Text Editing or Generating emojis**, is a Track A application-based machine learning project for CS182 in ShanghaiTech. It builds a complete emoji editing/generation-style pipeline where a user provides either a source emoji plus an edit instruction, or only a text description, and the system generates an emoji image while trying to preserve clean emoji style and centered icon composition.
 
 The final prototype is a Gradio demo backed by an InstructPix2Pix diffusion model with LoRA fine-tuning on a curated emoji editing dataset.
 
